@@ -1,7 +1,5 @@
 alert("MAIN JS LOADED");
 
-import * as THREE from "https://cdn.skypack.dev/three@0.152.2";
-
 const canvas = document.getElementById("game");
 const scene = new THREE.Scene();
 
@@ -16,7 +14,6 @@ const renderer = new THREE.WebGLRenderer({ canvas });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(window.devicePixelRatio);
 
-// simple test object
 const cube = new THREE.Mesh(
   new THREE.BoxGeometry(),
   new THREE.MeshBasicMaterial({ color: 0x00ff00 })
