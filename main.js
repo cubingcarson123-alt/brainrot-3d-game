@@ -35,7 +35,7 @@ const player = new THREE.Mesh(
   new THREE.BoxGeometry(0.8, 0.8, 0.8),
   new THREE.MeshBasicMaterial({ color: 0x4aa3ff })
 );
-player.position.set(-18, 0.4, 18);
+player.position.set(-12, 0.4, 12);
 scene.add(player);
 
 // ===== ENEMY =====
@@ -43,7 +43,7 @@ const enemy = new THREE.Mesh(
   new THREE.BoxGeometry(1, 1, 1),
   new THREE.MeshBasicMaterial({ color: 0xff3333 })
 );
-enemy.position.set(18, 0.5, -18);
+enemy.position.set(12, 0.5, -12);
 scene.add(enemy);
 
 // ===== MAZE GRID =====
