@@ -1,8 +1,8 @@
-console.log("GAME START");
+console.log("MAZE MODE LOADED");
 
 // ===== SCENE =====
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x111111);
+scene.background = new THREE.Color(0x0b0b0b);
 
 // ===== CAMERA =====
 const camera = new THREE.PerspectiveCamera(
@@ -11,7 +11,7 @@ const camera = new THREE.PerspectiveCamera(
   0.1,
   1000
 );
-camera.position.set(0, 2, 5);
+camera.position.set(0, 2, 6);
 
 // ===== RENDERER =====
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -20,96 +20,114 @@ renderer.setPixelRatio(window.devicePixelRatio);
 document.body.appendChild(renderer.domElement);
 
 // ===== LIGHT =====
-scene.add(new THREE.AmbientLight(0xffffff, 1));
+scene.add(new THREE.AmbientLight(0xffffff, 0.9));
 
 // ===== FLOOR =====
 const floor = new THREE.Mesh(
-  new THREE.PlaneGeometry(50, 50),
-  new THREE.MeshBasicMaterial({ color: 0x222222 })
+  new THREE.PlaneGeometry(40, 40),
+  new THREE.MeshBasicMaterial({ color: 0x111111 })
 );
 floor.rotation.x = -Math.PI / 2;
 scene.add(floor);
 
 // ===== PLAYER =====
 const player = new THREE.Mesh(
-  new THREE.BoxGeometry(1, 1, 1),
-  new THREE.MeshBasicMaterial({ color: 0x3498db })
+  new THREE.BoxGeometry(0.8, 0.8, 0.8),
+  new THREE.MeshBasicMaterial({ color: 0x4aa3ff })
 );
-player.position.y = 0.5;
+player.position.set(-18, 0.4, 18);
 scene.add(player);
 
 // ===== ENEMY =====
 const enemy = new THREE.Mesh(
-  new THREE.BoxGeometry(1.2, 1.2, 1.2),
-  new THREE.MeshBasicMaterial({ color: 0xe74c3c })
+  new THREE.BoxGeometry(1, 1, 1),
+  new THREE.MeshBasicMaterial({ color: 0xff3333 })
 );
-enemy.position.set(0, 0.6, -15);
+enemy.position.set(18, 0.5, -18);
 scene.add(enemy);
 
-// ===== MAZE WALLS =====
+// ===== MAZE GRID =====
 const walls = [];
+const cellSize = 4;
 
-function addWall(x, z, w, d) {
+// 1 = wall, 0 = path
+const maze = [
+  "1111111111",
+  "1000000001",
+  "1011111101",
+  "1010000101",
+  "1010110101",
+  "1010110101",
+  "1010000101",
+  "1011111101",
+  "1000000001",
+  "1111111111",
+];
+
+function addWall(x, z) {
   const wall = new THREE.Mesh(
-    new THREE.BoxGeometry(w, 2, d),
-    new THREE.MeshBasicMaterial({ color: 0x555555 })
+    new THREE.BoxGeometry(cellSize, 2, cellSize),
+    new THREE.MeshBasicMaterial({ color: 0x333333 })
   );
   wall.position.set(x, 1, z);
   scene.add(wall);
   walls.push(wall);
 }
 
-// outer walls
-addWall(0, -25, 50, 2);
-addWall(0, 25, 50, 2);
-addWall(-25, 0, 2, 50);
-addWall(25, 0, 2, 50);
-
-// inner maze
-addWall(0, -10, 20, 2);
-addWall(-10, -5, 2, 20);
-addWall(10, 5, 2, 20);
-addWall(0, 10, 20, 2);
+// build maze
+maze.forEach((row, z) => {
+  [...row].forEach((cell, x) => {
+    if (cell === "1") {
+      addWall(
+        (x - 5) * cellSize,
+        (z - 5) * cellSize
+      );
+    }
+  });
+});
 
 // ===== CONTROLS =====
 const keys = {};
 window.addEventListener("keydown", e => keys[e.key.toLowerCase()] = true);
 window.addEventListener("keyup", e => keys[e.key.toLowerCase()] = false);
 
-// ===== COLLISION =====
-function collides(pos) {
+// ===== COLLISION (REAL) =====
+function blocked(x, z) {
+  const box = new THREE.Box3(
+    new THREE.Vector3(x - 0.4, 0, z - 0.4),
+    new THREE.Vector3(x + 0.4, 1, z + 0.4)
+  );
+
   for (const wall of walls) {
-    if (
-      Math.abs(pos.x - wall.position.x) < 1.2 &&
-      Math.abs(pos.z - wall.position.z) < 1.2
-    ) {
-      return true;
-    }
+    const wallBox = new THREE.Box3().setFromObject(wall);
+    if (box.intersectsBox(wallBox)) return true;
   }
   return false;
 }
 
 // ===== GAME LOOP =====
 function animate() {
-  const speed = 0.12;
-  const oldPos = player.position.clone();
+  const speed = 0.15;
 
-  if (keys["w"]) player.position.z -= speed;
-  if (keys["s"]) player.position.z += speed;
-  if (keys["a"]) player.position.x -= speed;
-  if (keys["d"]) player.position.x += speed;
+  let nx = player.position.x;
+  let nz = player.position.z;
 
-  if (collides(player.position)) {
-    player.position.copy(oldPos);
-  }
+  if (keys["w"]) nz -= speed;
+  if (keys["s"]) nz += speed;
+  if (keys["a"]) nx -= speed;
+  if (keys["d"]) nx += speed;
+
+  // block X and Z separately
+  if (!blocked(nx, player.position.z)) player.position.x = nx;
+  if (!blocked(player.position.x, nz)) player.position.z = nz;
 
   // enemy chase
   const dir = new THREE.Vector3().subVectors(player.position, enemy.position);
   dir.y = 0;
   dir.normalize();
-  enemy.position.addScaledVector(dir, 0.04);
+  enemy.position.addScaledVector(dir, 0.03);
 
-  // camera follow
+  // camera
   camera.position.x = player.position.x;
   camera.position.z = player.position.z + 6;
   camera.lookAt(player.position);
