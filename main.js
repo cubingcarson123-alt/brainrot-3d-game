@@ -1,5 +1,3 @@
-import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.module.js";
-
 console.log("MAIN JS RUNNING");
 
 // ===== SCENE =====
@@ -53,21 +51,18 @@ const keys = {};
 window.addEventListener("keydown", e => keys[e.key.toLowerCase()] = true);
 window.addEventListener("keyup", e => keys[e.key.toLowerCase()] = false);
 
-// ===== GAME LOOP =====
+// ===== LOOP =====
 function animate() {
-  // movement
   if (keys["w"]) player.position.z -= 0.1;
   if (keys["s"]) player.position.z += 0.1;
   if (keys["a"]) player.position.x -= 0.1;
   if (keys["d"]) player.position.x += 0.1;
 
-  // enemy chase
   const dir = new THREE.Vector3().subVectors(player.position, enemy.position);
   dir.y = 0;
   dir.normalize();
   enemy.position.addScaledVector(dir, 0.04);
 
-  // camera follow
   camera.position.x = player.position.x;
   camera.position.z = player.position.z + 5;
   camera.lookAt(player.position);
