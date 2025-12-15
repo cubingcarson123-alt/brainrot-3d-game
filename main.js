@@ -28,48 +28,16 @@ const player = new THREE.Mesh(
 player.position.y = 0.5;
 scene.add(player);
 
-// Camera follows player
+// ===== ENEMY (BRAINROT) =====
+const enemy = new THREE.Mesh(
+  new THREE.BoxGeometry(1.2, 1.2, 1.2),
+  new THREE.MeshStandardMaterial({ color: 0xe74c3c })
+);
+enemy.position.set(0, 0.6, -15);
+scene.add(enemy);
+
+// ===== CAMERA FOLLOW =====
 camera.position.set(0, 2, 5);
 camera.lookAt(player.position);
 
-// ===== GROUND =====
-const ground = new THREE.Mesh(
-  new THREE.PlaneGeometry(100, 100),
-  new THREE.MeshStandardMaterial({ color: 0x2ecc71 })
-);
-ground.rotation.x = -Math.PI / 2;
-scene.add(ground);
-
-// ===== CONTROLS =====
-const keys = {};
-window.addEventListener("keydown", e => keys[e.key.toLowerCase()] = true);
-window.addEventListener("keyup", e => keys[e.key.toLowerCase()] = false);
-
-// ===== MOVEMENT =====
-function movePlayer() {
-  const speed = 0.15;
-  if (keys["w"]) player.position.z -= speed;
-  if (keys["s"]) player.position.z += speed;
-  if (keys["a"]) player.position.x -= speed;
-  if (keys["d"]) player.position.x += speed;
-
-  camera.position.x = player.position.x;
-  camera.position.z = player.position.z + 5;
-  camera.lookAt(player.position);
-}
-
-// ===== LOOP =====
-function animate() {
-  movePlayer();
-  renderer.render(scene, camera);
-  requestAnimationFrame(animate);
-}
-
-animate();
-
-// ===== RESIZE =====
-window.addEventListener("resize", () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-});
+// ===== GROUND ==
