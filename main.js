@@ -1,6 +1,6 @@
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.module.js";
 
-let gameStarted = true;
+console.log("MAIN JS RUNNING");
 
 // ===== SCENE =====
 const scene = new THREE.Scene();
@@ -26,7 +26,7 @@ scene.add(new THREE.AmbientLight(0xffffff, 1));
 
 // ===== GROUND =====
 const ground = new THREE.Mesh(
-  new THREE.PlaneGeometry(100, 100),
+  new THREE.PlaneGeometry(50, 50),
   new THREE.MeshBasicMaterial({ color: 0x2ecc71 })
 );
 ground.rotation.x = -Math.PI / 2;
@@ -53,17 +53,34 @@ const keys = {};
 window.addEventListener("keydown", e => keys[e.key.toLowerCase()] = true);
 window.addEventListener("keyup", e => keys[e.key.toLowerCase()] = false);
 
-// ===== LOOP =====
+// ===== GAME LOOP =====
 function animate() {
-  if (gameStarted) {
-    if (keys["w"]) player.position.z -= 0.1;
-    if (keys["s"]) player.position.z += 0.1;
-    if (keys["a"]) player.position.x -= 0.1;
-    if (keys["d"]) player.position.x += 0.1;
+  // movement
+  if (keys["w"]) player.position.z -= 0.1;
+  if (keys["s"]) player.position.z += 0.1;
+  if (keys["a"]) player.position.x -= 0.1;
+  if (keys["d"]) player.position.x += 0.1;
 
-    const dir = new THREE.Vector3().subVectors(player.position, enemy.position);
-    dir.y = 0;
-    dir.normalize();
-    enemy.position.addScaledVector(dir, 0.05);
+  // enemy chase
+  const dir = new THREE.Vector3().subVectors(player.position, enemy.position);
+  dir.y = 0;
+  dir.normalize();
+  enemy.position.addScaledVector(dir, 0.04);
 
-    camera.position.x = playe
+  // camera follow
+  camera.position.x = player.position.x;
+  camera.position.z = player.position.z + 5;
+  camera.lookAt(player.position);
+
+  renderer.render(scene, camera);
+  requestAnimationFrame(animate);
+}
+
+animate();
+
+// ===== RESIZE =====
+window.addEventListener("resize", () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
