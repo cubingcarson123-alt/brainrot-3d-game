@@ -1,3 +1,4 @@
+console.log("MAIN JS STARTED");
 // ===== BASIC SETUP =====
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87ceeb);
