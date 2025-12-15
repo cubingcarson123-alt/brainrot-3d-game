@@ -79,6 +79,20 @@ function carve(x,y){
 }
 carve(1,1);
 
+/* ===== FIND EMPTY CELL ===== */
+function findEmpty() {
+  while (true) {
+    const x = Math.floor(Math.random() * GRID);
+    const z = Math.floor(Math.random() * GRID);
+    if (maze[z][x] === 0) {
+      return {
+        x: (x - GRID/2) * CELL,
+        z: (z - GRID/2) * CELL
+      };
+    }
+  }
+}
+
 /* ===== WALLS ===== */
 const walls=[];
 const wallGeo=new THREE.BoxGeometry(CELL,4,CELL);
@@ -108,15 +122,17 @@ const player=new THREE.Mesh(
   new THREE.BoxGeometry(2,2,2),
   new THREE.MeshStandardMaterial({color:0x4aa3ff})
 );
-player.position.set(-(GRID/2-2)*CELL,1,-(GRID/2-2)*CELL);
+const pSpawn = findEmpty();
+player.position.set(pSpawn.x,1,pSpawn.z);
 scene.add(player);
 
-/* ===== ENEMY ===== */
+/* ===== ENEMY (SMALLER) ===== */
 const enemy=new THREE.Mesh(
-  new THREE.BoxGeometry(2.2,2.2,2.2),
+  new THREE.BoxGeometry(1.6,1.6,1.6),
   new THREE.MeshStandardMaterial({color:0xff4444})
 );
-enemy.position.set((GRID/2-2)*CELL,1,(GRID/2-2)*CELL);
+const eSpawn = findEmpty();
+enemy.position.set(eSpawn.x,0.8,eSpawn.z);
 scene.add(enemy);
 
 /* ===== INPUT ===== */
@@ -124,12 +140,12 @@ const keys={};
 addEventListener('keydown',e=>keys[e.key.toLowerCase()]=true);
 addEventListener('keyup',e=>keys[e.key.toLowerCase()]=false);
 
-/* ===== COLLISION (FIXED) ===== */
-const RADIUS = 1.1;
+/* ===== COLLISION ===== */
+const RADIUS = 0.9;
 
 function blocked(x,z){
-  const gx=Math.floor((x)/CELL+GRID/2);
-  const gz=Math.floor((z)/CELL+GRID/2);
+  const gx=Math.floor(x/CELL+GRID/2);
+  const gz=Math.floor(z/CELL+GRID/2);
   return maze[gz]?.[gx]===1;
 }
 
