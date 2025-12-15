@@ -1,23 +1,32 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
 <meta charset="UTF-8">
-<title>Brainrot Smart AI</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Brainrot Horror Maze</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
 body{margin:0;overflow:hidden;background:black}
-#ui{position:fixed;top:10px;left:10px;color:white;font-family:monospace}
+#ui{
+ position:fixed;
+ top:10px;left:10px;
+ font-family:monospace;
+ color:white;
+}
+#meter{width:200px;height:14px;background:#333;margin-top:6px}
+#fill{height:100%;width:0%;background:lime}
 </style>
 </head>
 <body>
-<div id="ui">W = move forward</div>
+<div id="ui">
+Brainrot Nearby
+<div id="meter"><div id="fill"></div></div>
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
 <script>
-/* ===== BASIC ===== */
+/* ===== SCENE ===== */
 const scene=new THREE.Scene();
-scene.background=new THREE.Color(0x111111);
-
+scene.background=new THREE.Color(0x050505);
 const camera=new THREE.PerspectiveCamera(75,innerWidth/innerHeight,0.1,1000);
 const renderer=new THREE.WebGLRenderer({antialias:true});
 renderer.setSize(innerWidth,innerHeight);
@@ -29,7 +38,7 @@ addEventListener("resize",()=>{
  renderer.setSize(innerWidth,innerHeight);
 });
 
-scene.add(new THREE.AmbientLight(0xffffff,0.7));
+scene.add(new THREE.AmbientLight(0xffffff,0.6));
 
 /* ===== MAZE ===== */
 const GRID=21, CELL=10;
@@ -49,15 +58,14 @@ function carve(x,y){
 carve(1,1);
 
 /* ===== WALLS ===== */
-const walls=[];
 const wallGeo=new THREE.BoxGeometry(CELL,5,CELL);
-const wallMat=new THREE.MeshStandardMaterial({color:0x555555});
+const wallMat=new THREE.MeshStandardMaterial({color:0x444444});
 for(let z=0;z<GRID;z++){
  for(let x=0;x<GRID;x++){
   if(maze[z][x]){
    const w=new THREE.Mesh(wallGeo,wallMat);
    w.position.set((x-GRID/2)*CELL,2.5,(z-GRID/2)*CELL);
-   scene.add(w); walls.push(w);
+   scene.add(w);
   }
  }
 }
@@ -65,17 +73,16 @@ for(let z=0;z<GRID;z++){
 /* ===== FLOOR ===== */
 const floor=new THREE.Mesh(
  new THREE.PlaneGeometry(1000,1000),
- new THREE.MeshStandardMaterial({color:0x222222})
+ new THREE.MeshStandardMaterial({color:0x111111})
 );
 floor.rotation.x=-Math.PI/2;
 scene.add(floor);
 
 /* ===== HELPERS ===== */
-const gridFromWorld=v=>Math.floor(v/CELL+GRID/2);
 const worldFromGrid=v=>(v-GRID/2)*CELL;
 const open=(x,z)=>maze[z]?.[x]===0;
 
-function randomOpen(){
+function randomCell(){
  while(true){
   const x=Math.floor(Math.random()*GRID);
   const z=Math.floor(Math.random()*GRID);
@@ -84,54 +91,41 @@ function randomOpen(){
 }
 
 /* ===== PLAYER ===== */
-const player={pos:new THREE.Vector3(),yaw:0};
-const ps=randomOpen();
-player.pos.set(worldFromGrid(ps.x),1.7,worldFromGrid(ps.z));
+let player=randomCell();
+let yaw=0;
 
 /* ===== ENEMY ===== */
+let enemy=randomCell();
 const enemyMesh=new THREE.Mesh(
  new THREE.BoxGeometry(2,2,2),
- new THREE.MeshStandardMaterial({color:0xff4444})
+ new THREE.MeshStandardMaterial({color:0xff3333})
 );
 scene.add(enemyMesh);
 
-let enemy=randomOpen();
-enemyMesh.position.set(worldFromGrid(enemy.x),1,worldFromGrid(enemy.z));
-
-/* ===== A* PATHFINDING ===== */
+/* ===== A* ===== */
 function findPath(sx,sz,tx,tz){
- const openSet=[[sx,sz]];
- const came={};
- const key=(x,z)=>x+","+z;
- const cost={[key(sx,sz)]:0};
-
- while(openSet.length){
-  const [x,z]=openSet.shift();
+ const q=[[sx,sz]];
+ const came={}, seen=new Set([sx+","+sz]);
+ while(q.length){
+  const [x,z]=q.shift();
   if(x===tx&&z===tz) break;
-
   [[1,0],[-1,0],[0,1],[0,-1]].forEach(([dx,dz])=>{
-   const nx=x+dx, nz=z+dz;
-   if(!open(nx,nz)) return;
-   const k=key(nx,nz);
-   const n=cost[key(x,z)]+1;
-   if(cost[k]===undefined||n<cost[k]){
-    cost[k]=n;
+   const nx=x+dx,nz=z+dz;
+   const k=nx+","+nz;
+   if(open(nx,nz)&&!seen.has(k)){
+    seen.add(k);
     came[k]=[x,z];
-    openSet.push([nx,nz]);
+    q.push([nx,nz]);
    }
   });
  }
-
- const path=[];
- let cur=[tx,tz];
- while(cur&&!(cur[0]===sx&&cur[1]===sz)){
-  path.push(cur);
-  cur=came[key(cur[0],cur[1])];
- }
- return path.reverse();
+ let path=[[tx,tz]];
+ while(came[path[0][0]+","+path[0][1]])
+  path.unshift(came[path[0][0]+","+path[0][1]]);
+ return path;
 }
 
-let path=[], step=0;
+let path=[],step=0,tick=0;
 
 /* ===== INPUT ===== */
 let forward=false;
@@ -139,48 +133,45 @@ addEventListener("keydown",e=>{if(e.key==="w")forward=true});
 addEventListener("keyup",e=>{if(e.key==="w")forward=false});
 
 addEventListener("mousemove",e=>{
- if(document.pointerLockElement===document.body){
-  player.yaw-=e.movementX*0.002;
- }
+ if(document.pointerLockElement===document.body)
+  yaw-=e.movementX*0.002;
 });
 document.body.onclick=()=>document.body.requestPointerLock();
 
 /* ===== LOOP ===== */
-const speed=0.18, enemySpeed=0.05;
-let timer=0;
+const fill=document.getElementById("fill");
 
 function animate(){
  requestAnimationFrame(animate);
 
  if(forward){
-  const nx=player.pos.x-Math.sin(player.yaw)*speed;
-  const nz=player.pos.z-Math.cos(player.yaw)*speed;
-  if(open(gridFromWorld(nx),gridFromWorld(nz))){
-   player.pos.x=nx; player.pos.z=nz;
-  }
+  const nx=player.x-Math.round(Math.sin(yaw));
+  const nz=player.z-Math.round(Math.cos(yaw));
+  if(open(nx,nz)) player={x:nx,z:nz};
  }
 
- timer++;
- if(timer%30===0){
-  path=findPath(
-   enemy.x,enemy.z,
-   gridFromWorld(player.pos.x),
-   gridFromWorld(player.pos.z)
-  );
-  step=0;
+ tick++;
+ if(tick%20===0){
+  path=findPath(enemy.x,enemy.z,player.x,player.z);
+  step=1;
  }
 
  if(path[step]){
-  enemy.x+=Math.sign(path[step][0]-enemy.x)*enemySpeed;
-  enemy.z+=Math.sign(path[step][1]-enemy.z)*enemySpeed;
-  if(Math.abs(enemy.x-path[step][0])<0.1 &&
-     Math.abs(enemy.z-path[step][1])<0.1) step++;
+  enemy=path[step];
+  step++;
  }
 
  enemyMesh.position.set(worldFromGrid(enemy.x),1,worldFromGrid(enemy.z));
 
- camera.position.copy(player.pos);
- camera.rotation.set(0,player.yaw,0);
+ const dx=player.x-enemy.x, dz=player.z-enemy.z;
+ const dist=Math.hypot(dx,dz);
+ const danger=Math.max(0,1-dist/8);
+ fill.style.width=(danger*100)+"%";
+ fill.style.background=danger>0.7?"red":danger>0.4?"orange":"lime";
+
+ camera.position.set(worldFromGrid(player.x),1.7,worldFromGrid(player.z));
+ camera.rotation.set(0,yaw,0);
+
  renderer.render(scene,camera);
 }
 animate();
