@@ -1,30 +1,25 @@
-console.log("BRAINROT MAZE READY");
+console.log("BRAINROT MAZE AI FINAL");
 
 // ===== SPEEDS =====
 const PLAYER_SPEED = 0.15;
-const ENEMY_SPEED = 0.15;
+const ENEMY_SPEED  = 0.15;
 
 // ===== SCENE =====
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0b0b0b);
 
 // ===== CAMERA =====
-const camera = new THREE.PerspectiveCamera(
-  75,
-  window.innerWidth / window.innerHeight,
-  0.1,
-  1000
-);
+const camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.1, 1000);
 camera.position.set(0, 2, 6);
 
 // ===== RENDERER =====
 const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(devicePixelRatio);
 document.body.appendChild(renderer.domElement);
 
 // ===== LIGHT =====
-scene.add(new THREE.AmbientLight(0xffffff, 0.9));
+scene.add(new THREE.AmbientLight(0xffffff, 1));
 
 // ===== FLOOR =====
 const floor = new THREE.Mesh(
@@ -54,7 +49,6 @@ scene.add(enemy);
 const walls = [];
 const cellSize = 4;
 
-// 1 = wall, 0 = path
 const maze = [
   "1111111111",
   "1000000001",
@@ -78,22 +72,18 @@ function addWall(x, z) {
   walls.push(wall);
 }
 
-// build maze
 maze.forEach((row, z) => {
   [...row].forEach((cell, x) => {
     if (cell === "1") {
-      addWall(
-        (x - 5) * cellSize,
-        (z - 5) * cellSize
-      );
+      addWall((x - 5) * cellSize, (z - 5) * cellSize);
     }
   });
 });
 
-// ===== CONTROLS =====
+// ===== INPUT =====
 const keys = {};
-window.addEventListener("keydown", e => keys[e.key.toLowerCase()] = true);
-window.addEventListener("keyup", e => keys[e.key.toLowerCase()] = false);
+addEventListener("keydown", e => keys[e.key.toLowerCase()] = true);
+addEventListener("keyup",   e => keys[e.key.toLowerCase()] = false);
 
 // ===== COLLISION =====
 function blocked(x, z, size = 0.4) {
@@ -101,51 +91,51 @@ function blocked(x, z, size = 0.4) {
     new THREE.Vector3(x - size, 0, z - size),
     new THREE.Vector3(x + size, 1, z + size)
   );
-
-  for (const wall of walls) {
-    const wallBox = new THREE.Box3().setFromObject(wall);
-    if (box.intersectsBox(wallBox)) return true;
+  for (const w of walls) {
+    if (box.intersectsBox(new THREE.Box3().setFromObject(w))) return true;
   }
   return false;
 }
 
-// ===== GAME LOOP =====
+// ===== ENEMY MEMORY =====
+let enemyDir = new THREE.Vector2(0, 0);
+
+// ===== LOOP =====
 function animate() {
-  // ---- PLAYER MOVE ----
+
+  // ---- PLAYER ----
   let px = player.position.x;
   let pz = player.position.z;
 
-  if (keys["w"]) pz -= PLAYER_SPEED;
-  if (keys["s"]) pz += PLAYER_SPEED;
-  if (keys["a"]) px -= PLAYER_SPEED;
-  if (keys["d"]) px += PLAYER_SPEED;
+  if (keys.w) pz -= PLAYER_SPEED;
+  if (keys.s) pz += PLAYER_SPEED;
+  if (keys.a) px -= PLAYER_SPEED;
+  if (keys.d) px += PLAYER_SPEED;
 
   if (!blocked(px, player.position.z)) player.position.x = px;
   if (!blocked(player.position.x, pz)) player.position.z = pz;
 
-  // ---- ENEMY MOVE (SMART SLIDE) ----
-  const dir = new THREE.Vector3().subVectors(player.position, enemy.position);
-  dir.y = 0;
-  dir.normalize();
+  // ---- ENEMY AI (WALL FOLLOW) ----
+  const toPlayer = new THREE.Vector2(
+    player.position.x - enemy.position.x,
+    player.position.z - enemy.position.z
+  ).normalize();
 
-  let moved = false;
+  // update intent only if not stuck
+  if (enemyDir.length() === 0 || Math.random() < 0.02) {
+    enemyDir.copy(toPlayer);
+  }
 
-  const ex = enemy.position.x + dir.x * ENEMY_SPEED;
-  if (!blocked(ex, enemy.position.z, 0.5)) {
+  let ex = enemy.position.x + enemyDir.x * ENEMY_SPEED;
+  let ez = enemy.position.z + enemyDir.y * ENEMY_SPEED;
+
+  if (!blocked(ex, ez, 0.5)) {
     enemy.position.x = ex;
-    moved = true;
-  }
-
-  const ez = enemy.position.z + dir.z * ENEMY_SPEED;
-  if (!blocked(enemy.position.x, ez, 0.5)) {
     enemy.position.z = ez;
-    moved = true;
-  }
-
-  // slide if stuck
-  if (!moved) {
-    const slideX = enemy.position.x + Math.sign(dir.z) * ENEMY_SPEED;
-    const slideZ = enemy.position.z + Math.sign(dir.x) * ENEMY_SPEED;
+  } else {
+    // slide along wall
+    const slideX = enemy.position.x + enemyDir.y * ENEMY_SPEED;
+    const slideZ = enemy.position.z - enemyDir.x * ENEMY_SPEED;
 
     if (!blocked(slideX, enemy.position.z, 0.5)) {
       enemy.position.x = slideX;
@@ -166,8 +156,8 @@ function animate() {
 animate();
 
 // ===== RESIZE =====
-window.addEventListener("resize", () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
+addEventListener("resize", () => {
+  camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setSize(innerWidth, innerHeight);
 });
