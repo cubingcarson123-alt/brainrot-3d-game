@@ -1,8 +1,6 @@
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.module.js";
 
 let gameStarted = true;
-scene.background = new THREE.Color(0x222222);
-
 
 // ===== SCENE =====
 const scene = new THREE.Scene();
@@ -63,4 +61,9 @@ function animate() {
     if (keys["a"]) player.position.x -= 0.1;
     if (keys["d"]) player.position.x += 0.1;
 
-    const dir = new THREE.Vect
+    const dir = new THREE.Vector3().subVectors(player.position, enemy.position);
+    dir.y = 0;
+    dir.normalize();
+    enemy.position.addScaledVector(dir, 0.05);
+
+    camera.position.x = playe
