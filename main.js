@@ -1,4 +1,4 @@
-console.log("MAZE MODE LOADED");
+console.log("BRAINROT MAZE RUNNING");
 
 // ===== SCENE =====
 const scene = new THREE.Scene();
@@ -46,7 +46,7 @@ const enemy = new THREE.Mesh(
 enemy.position.set(12, 0.5, -12);
 scene.add(enemy);
 
-// ===== MAZE GRID =====
+// ===== MAZE =====
 const walls = [];
 const cellSize = 4;
 
@@ -91,11 +91,11 @@ const keys = {};
 window.addEventListener("keydown", e => keys[e.key.toLowerCase()] = true);
 window.addEventListener("keyup", e => keys[e.key.toLowerCase()] = false);
 
-// ===== COLLISION (REAL) =====
-function blocked(x, z) {
+// ===== COLLISION =====
+function blocked(x, z, size = 0.4) {
   const box = new THREE.Box3(
-    new THREE.Vector3(x - 0.4, 0, z - 0.4),
-    new THREE.Vector3(x + 0.4, 1, z + 0.4)
+    new THREE.Vector3(x - size, 0, z - size),
+    new THREE.Vector3(x + size, 1, z + size)
   );
 
   for (const wall of walls) {
@@ -109,25 +109,30 @@ function blocked(x, z) {
 function animate() {
   const speed = 0.15;
 
-  let nx = player.position.x;
-  let nz = player.position.z;
+  // player move
+  let px = player.position.x;
+  let pz = player.position.z;
 
-  if (keys["w"]) nz -= speed;
-  if (keys["s"]) nz += speed;
-  if (keys["a"]) nx -= speed;
-  if (keys["d"]) nx += speed;
+  if (keys["w"]) pz -= speed;
+  if (keys["s"]) pz += speed;
+  if (keys["a"]) px -= speed;
+  if (keys["d"]) px += speed;
 
-  // block X and Z separately
-  if (!blocked(nx, player.position.z)) player.position.x = nx;
-  if (!blocked(player.position.x, nz)) player.position.z = nz;
+  if (!blocked(px, player.position.z)) player.position.x = px;
+  if (!blocked(player.position.x, pz)) player.position.z = pz;
 
-  // enemy chase
+  // enemy move
   const dir = new THREE.Vector3().subVectors(player.position, enemy.position);
   dir.y = 0;
   dir.normalize();
-  enemy.position.addScaledVector(dir, 0.03);
 
-  // camera
+  const ex = enemy.position.x + dir.x * 0.03;
+  const ez = enemy.position.z + dir.z * 0.03;
+
+  if (!blocked(ex, enemy.position.z, 0.5)) enemy.position.x = ex;
+  if (!blocked(enemy.position.x, ez, 0.5)) enemy.position.z = ez;
+
+  // camera follow
   camera.position.x = player.position.x;
   camera.position.z = player.position.z + 6;
   camera.lookAt(player.position);
