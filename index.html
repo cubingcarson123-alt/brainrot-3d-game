@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Brainrot Maze (Fixed AI)</title>
+<title>Brainrot Chase</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
 body { margin:0; overflow:hidden; background:black; }
@@ -14,21 +14,30 @@ body { margin:0; overflow:hidden; background:black; }
   font-family:monospace;
 }
 #meter {
-  width:240px;
+  width:220px;
   height:14px;
   background:#333;
   border:1px solid #777;
   margin-top:6px;
 }
 #fill { height:100%; width:0%; background:lime; }
+#hint {
+  position:fixed;
+  bottom:10px;
+  left:50%;
+  transform:translateX(-50%);
+  color:#aaa;
+  font-family:monospace;
+}
 </style>
 </head>
 <body>
 
 <div id="ui">
-Brainrot Proximity
+Brainrot Nearby
 <div id="meter"><div id="fill"></div></div>
 </div>
+<div id="hint">Click to lock mouse • W = move forward • ESC = unlock</div>
 
 <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
 <script>
@@ -41,47 +50,48 @@ const renderer = new THREE.WebGLRenderer({antialias:true});
 renderer.setSize(innerWidth, innerHeight);
 document.body.appendChild(renderer.domElement);
 
-addEventListener('resize',()=>{
+addEventListener("resize",()=>{
   camera.aspect = innerWidth/innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
 });
 
 scene.add(new THREE.AmbientLight(0xffffff,0.7));
-const sun = new THREE.DirectionalLight(0xffffff,0.6);
-sun.position.set(10,15,5);
-scene.add(sun);
+const light = new THREE.DirectionalLight(0xffffff,0.6);
+light.position.set(10,15,5);
+scene.add(light);
 
 /* ================= MAZE ================= */
 const GRID = 21;
 const CELL = 10;
-const WALL_H = 5;
-
 const maze = Array.from({length:GRID},()=>Array(GRID).fill(1));
 
 function carve(x,y){
   maze[y][x]=0;
-  [[2,0],[-2,0],[0,2],[0,-2]].sort(()=>Math.random()-0.5)
-  .forEach(([dx,dy])=>{
-    const nx=x+dx, ny=y+dy;
-    if(nx>0&&ny>0&&nx<GRID-1&&ny<GRID-1&&maze[ny][nx]){
-      maze[y+dy/2][x+dx/2]=0;
-      carve(nx,ny);
-    }
-  });
+  [[2,0],[-2,0],[0,2],[0,-2]]
+    .sort(()=>Math.random()-0.5)
+    .forEach(([dx,dy])=>{
+      const nx=x+dx, ny=y+dy;
+      if(nx>0&&ny>0&&nx<GRID-1&&ny<GRID-1&&maze[ny][nx]){
+        maze[y+dy/2][x+dx/2]=0;
+        carve(nx,ny);
+      }
+    });
 }
 carve(1,1);
 
 /* ================= WALLS ================= */
-const wallGeo = new THREE.BoxGeometry(CELL, WALL_H, CELL);
-const wallMat = new THREE.MeshStandardMaterial({color:0x555555});
+const walls=[];
+const wallGeo=new THREE.BoxGeometry(CELL,5,CELL);
+const wallMat=new THREE.MeshStandardMaterial({color:0x555555});
 
 for(let z=0;z<GRID;z++){
   for(let x=0;x<GRID;x++){
     if(maze[z][x]){
       const w=new THREE.Mesh(wallGeo,wallMat);
-      w.position.set((x-GRID/2)*CELL,WALL_H/2,(z-GRID/2)*CELL);
+      w.position.set((x-GRID/2)*CELL,2.5,(z-GRID/2)*CELL);
       scene.add(w);
+      walls.push(w);
     }
   }
 }
@@ -95,15 +105,8 @@ floor.rotation.x=-Math.PI/2;
 scene.add(floor);
 
 /* ================= HELPERS ================= */
-function gridToWorld(g){
-  return (g-GRID/2)*CELL;
-}
-function worldToGrid(v){
-  return Math.round(v/CELL+GRID/2);
-}
-function openCell(x,z){
-  return maze[z]?.[x]===0;
-}
+function worldToGrid(v){ return Math.floor(v/CELL + GRID/2); }
+function openCell(x,z){ return maze[z]?.[x]===0; }
 function randomOpen(){
   while(true){
     const x=Math.floor(Math.random()*GRID);
@@ -117,99 +120,88 @@ const player = {
   pos:new THREE.Vector3(),
   yaw:0
 };
-const ps = randomOpen();
-player.pos.set(gridToWorld(ps.x),1.7,gridToWorld(ps.z));
+const pSpawn=randomOpen();
+player.pos.set((pSpawn.x-GRID/2)*CELL,1.7,(pSpawn.z-GRID/2)*CELL);
 
 /* ================= ENEMY ================= */
-const enemyMesh = new THREE.Mesh(
+const enemyMesh=new THREE.Mesh(
   new THREE.BoxGeometry(2,2,2),
   new THREE.MeshStandardMaterial({color:0xff4444})
 );
 scene.add(enemyMesh);
 
-const es = randomOpen();
-let enemy = {
-  gx: es.x,
-  gz: es.z,
-  tx: es.x,
-  tz: es.z,
-  mode: "ROAM",
-  cooldown: 0
+const eSpawn=randomOpen();
+let enemy={
+  gx:eSpawn.x,
+  gz:eSpawn.z
 };
-enemyMesh.position.set(gridToWorld(enemy.gx),1,gridToWorld(enemy.gz));
+enemyMesh.position.set(
+  (enemy.gx-GRID/2)*CELL,
+  1,
+  (enemy.gz-GRID/2)*CELL
+);
 
 /* ================= INPUT ================= */
-const keys={};
-addEventListener('keydown',e=>keys[e.key.toLowerCase()]=true);
-addEventListener('keyup',e=>keys[e.key.toLowerCase()]=false);
-addEventListener('mousemove',e=>player.yaw-=e.movementX*0.002);
-document.body.addEventListener('click',()=>document.body.requestPointerLock());
+let forward=false;
+addEventListener("keydown",e=>{ if(e.key==="w") forward=true; });
+addEventListener("keyup",e=>{ if(e.key==="w") forward=false; });
 
-/* ================= AI ================= */
-function neighbors(x,z){
-  return [
-    [x+1,z],[x-1,z],[x,z+1],[x,z-1]
-  ].filter(([a,b])=>openCell(a,b));
-}
-
-function chooseRoamTarget(){
-  const n = neighbors(enemy.gx,enemy.gz);
-  if(n.length){
-    const [x,z]=n[Math.floor(Math.random()*n.length)];
-    enemy.tx=x; enemy.tz=z;
+document.body.addEventListener("click",()=>{
+  if(document.pointerLockElement!==document.body){
+    document.body.requestPointerLock();
   }
+});
+
+addEventListener("mousemove",e=>{
+  if(document.pointerLockElement===document.body){
+    player.yaw -= e.movementX * 0.002;
+  }
+});
+
+/* ================= COLLISION ================= */
+function canMove(x,z){
+  const gx=worldToGrid(x);
+  const gz=worldToGrid(z);
+  return openCell(gx,gz);
 }
 
 /* ================= LOOP ================= */
-const pSpeed=0.18;
-const eSpeed=0.08;
+const speed=0.18;
+const enemySpeed=0.05;
 const fill=document.getElementById("fill");
 
 function animate(){
   requestAnimationFrame(animate);
 
-  /* ===== Player ===== */
-  let dx=0,dz=0;
-  if(keys.w) dz-=pSpeed;
-  if(keys.s) dz+=pSpeed;
-  if(keys.a) dx-=pSpeed;
-  if(keys.d) dx+=pSpeed;
-
-  const sin=Math.sin(player.yaw);
-  const cos=Math.cos(player.yaw);
-  player.pos.x+=dx*cos-dz*sin;
-  player.pos.z+=dz*cos+dx*sin;
-
-  /* ===== Enemy AI ===== */
-  const pxg = worldToGrid(player.pos.x);
-  const pzg = worldToGrid(player.pos.z);
-
-  const dist = Math.hypot(pxg-enemy.gx,pzg-enemy.gz);
-
-  enemy.mode = dist < 6 ? "CHASE" : "ROAM";
-
-  if(enemy.cooldown<=0){
-    if(enemy.mode==="CHASE"){
-      const opts = neighbors(enemy.gx,enemy.gz)
-        .sort((a,b)=>Math.hypot(pxg-a[0],pzg-a[1]) - Math.hypot(pxg-b[0],pzg-b[1]));
-      if(opts[0]) [enemy.tx,enemy.tz]=opts[0];
-    } else chooseRoamTarget();
-    enemy.cooldown=30;
+  /* Player movement (FORWARD ONLY) */
+  if(forward){
+    const nx = player.pos.x - Math.sin(player.yaw)*speed;
+    const nz = player.pos.z - Math.cos(player.yaw)*speed;
+    if(canMove(nx,nz)){
+      player.pos.x = nx;
+      player.pos.z = nz;
+    }
   }
-  enemy.cooldown--;
 
-  enemy.gx += Math.sign(enemy.tx-enemy.gx)*eSpeed;
-  enemy.gz += Math.sign(enemy.tz-enemy.gz)*eSpeed;
+  /* Enemy chase */
+  const px=worldToGrid(player.pos.x);
+  const pz=worldToGrid(player.pos.z);
+  const dx=px-enemy.gx;
+  const dz=pz-enemy.gz;
 
-  enemyMesh.position.x = gridToWorld(enemy.gx);
-  enemyMesh.position.z = gridToWorld(enemy.gz);
+  if(Math.abs(dx)>Math.abs(dz)) enemy.gx+=Math.sign(dx)*enemySpeed;
+  else enemy.gz+=Math.sign(dz)*enemySpeed;
 
-  /* ===== Meter ===== */
-  const danger=Math.max(0,1-dist/10);
+  enemyMesh.position.x=(enemy.gx-GRID/2)*CELL;
+  enemyMesh.position.z=(enemy.gz-GRID/2)*CELL;
+
+  /* Meter */
+  const dist=Math.hypot(px-enemy.gx,pz-enemy.gz);
+  const danger=Math.max(0,1-dist/8);
   fill.style.width=`${danger*100}%`;
   fill.style.background=danger>0.7?"red":danger>0.4?"orange":"lime";
 
-  /* ===== Camera POV ===== */
+  /* Camera POV */
   camera.position.copy(player.pos);
   camera.rotation.set(0,player.yaw,0);
 
