@@ -49,21 +49,14 @@ const maze = Array.from({ length: SIZE }, () =>
   Array(SIZE).fill(1)
 );
 
-/* ================= DFS MAZE (ALWAYS SOLVABLE) ================= */
+/* ================= DFS MAZE ================= */
 function carve(x, z) {
   maze[z][x] = 0;
-
-  const dirs = [
-    [1, 0],
-    [-1, 0],
-    [0, 1],
-    [0, -1]
-  ].sort(() => Math.random() - 0.5);
+  const dirs = [[1,0],[-1,0],[0,1],[0,-1]].sort(() => Math.random() - 0.5);
 
   for (const [dx, dz] of dirs) {
     const nx = x + dx * 2;
     const nz = z + dz * 2;
-
     if (
       nx > 0 && nz > 0 &&
       nx < SIZE - 1 &&
@@ -75,7 +68,6 @@ function carve(x, z) {
     }
   }
 }
-
 carve(1, 1);
 
 /* ================= BUILD MAZE ================= */
@@ -102,16 +94,31 @@ player.position.set(
 );
 scene.add(player);
 
+/* ================= ENEMY ================= */
+const enemy = new THREE.Mesh(
+  new THREE.BoxGeometry(1.2, 1.2, 1.2),
+  new THREE.MeshBasicMaterial({ color: 0xff4444 })
+);
+enemy.position.set(
+  (SIZE - 2 - SIZE / 2) * CELL,
+  0.6,
+  (SIZE - 2 - SIZE / 2) * CELL
+);
+scene.add(enemy);
+
+const enemyDir = new THREE.Vector2(0, 1);
+let slideCooldown = 0;
+
 /* ================= INPUT ================= */
 const keys = {};
 window.addEventListener("keydown", e => keys[e.key.toLowerCase()] = true);
 window.addEventListener("keyup", e => keys[e.key.toLowerCase()] = false);
 
 /* ================= COLLISION ================= */
-function blocked(x, z) {
+function blocked(x, z, size = 0.5) {
   const box = new THREE.Box3(
-    new THREE.Vector3(x - 0.5, 0, z - 0.5),
-    new THREE.Vector3(x + 0.5, 1.5, z + 0.5)
+    new THREE.Vector3(x - size, 0, z - size),
+    new THREE.Vector3(x + size, 1.5, z + size)
   );
   return walls.some(w =>
     box.intersectsBox(new THREE.Box3().setFromObject(w))
@@ -134,12 +141,39 @@ function animate() {
   if (!blocked(nx, player.position.z)) player.position.x = nx;
   if (!blocked(player.position.x, nz)) player.position.z = nz;
 
-  camera.position.set(
-    player.position.x,
-    10,
-    player.position.z + 10
-  );
+  // CAMERA
+  camera.position.set(player.position.x, 10, player.position.z + 10);
   camera.lookAt(player.position);
+
+  // ENEMY AI (NO BOUNCE)
+  const toPlayer = new THREE.Vector2(
+    player.position.x - enemy.position.x,
+    player.position.z - enemy.position.z
+  ).normalize();
+
+  if (slideCooldown <= 0) enemyDir.copy(toPlayer);
+
+  let ex = enemy.position.x + enemyDir.x * speed;
+  let ez = enemy.position.z + enemyDir.y * speed;
+
+  if (!blocked(ex, ez, 0.6)) {
+    enemy.position.x = ex;
+    enemy.position.z = ez;
+    slideCooldown = 0;
+  } else {
+    const slide = new THREE.Vector2(-enemyDir.y, enemyDir.x);
+    ex = enemy.position.x + slide.x * speed;
+    ez = enemy.position.z + slide.y * speed;
+
+    if (!blocked(ex, ez, 0.6)) {
+      enemy.position.x = ex;
+      enemy.position.z = ez;
+      enemyDir.copy(slide);
+      slideCooldown = 20;
+    }
+  }
+
+  if (slideCooldown > 0) slideCooldown--;
 
   renderer.render(scene, camera);
 }
