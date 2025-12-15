@@ -1,3 +1,4 @@
+import * as THREE from "https://cdn.skypack.dev/three@0.152.2";
 // ===== BASIC SETUP =====
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87ceeb);
