@@ -2,210 +2,186 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Brainrot Chase</title>
+<title>Brainrot Smart AI</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
-body { margin:0; overflow:hidden; background:black; }
-#ui {
-  position:fixed;
-  top:10px;
-  left:10px;
-  color:white;
-  font-family:monospace;
-}
-#meter {
-  width:220px;
-  height:14px;
-  background:#333;
-  border:1px solid #777;
-  margin-top:6px;
-}
-#fill { height:100%; width:0%; background:lime; }
-#hint {
-  position:fixed;
-  bottom:10px;
-  left:50%;
-  transform:translateX(-50%);
-  color:#aaa;
-  font-family:monospace;
-}
+body{margin:0;overflow:hidden;background:black}
+#ui{position:fixed;top:10px;left:10px;color:white;font-family:monospace}
 </style>
 </head>
 <body>
-
-<div id="ui">
-Brainrot Nearby
-<div id="meter"><div id="fill"></div></div>
-</div>
-<div id="hint">Click to lock mouse • W = move forward • ESC = unlock</div>
+<div id="ui">W = move forward</div>
 
 <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
 <script>
-/* ================= SETUP ================= */
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x111111);
+/* ===== BASIC ===== */
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x111111);
 
-const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 1000);
-const renderer = new THREE.WebGLRenderer({antialias:true});
-renderer.setSize(innerWidth, innerHeight);
+const camera=new THREE.PerspectiveCamera(75,innerWidth/innerHeight,0.1,1000);
+const renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(innerWidth,innerHeight);
 document.body.appendChild(renderer.domElement);
 
 addEventListener("resize",()=>{
-  camera.aspect = innerWidth/innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(innerWidth, innerHeight);
+ camera.aspect=innerWidth/innerHeight;
+ camera.updateProjectionMatrix();
+ renderer.setSize(innerWidth,innerHeight);
 });
 
 scene.add(new THREE.AmbientLight(0xffffff,0.7));
-const light = new THREE.DirectionalLight(0xffffff,0.6);
-light.position.set(10,15,5);
-scene.add(light);
 
-/* ================= MAZE ================= */
-const GRID = 21;
-const CELL = 10;
-const maze = Array.from({length:GRID},()=>Array(GRID).fill(1));
+/* ===== MAZE ===== */
+const GRID=21, CELL=10;
+const maze=Array.from({length:GRID},()=>Array(GRID).fill(1));
 
 function carve(x,y){
-  maze[y][x]=0;
-  [[2,0],[-2,0],[0,2],[0,-2]]
-    .sort(()=>Math.random()-0.5)
-    .forEach(([dx,dy])=>{
-      const nx=x+dx, ny=y+dy;
-      if(nx>0&&ny>0&&nx<GRID-1&&ny<GRID-1&&maze[ny][nx]){
-        maze[y+dy/2][x+dx/2]=0;
-        carve(nx,ny);
-      }
-    });
+ maze[y][x]=0;
+ [[2,0],[-2,0],[0,2],[0,-2]].sort(()=>Math.random()-0.5)
+ .forEach(([dx,dy])=>{
+  const nx=x+dx, ny=y+dy;
+  if(nx>0&&ny>0&&nx<GRID-1&&ny<GRID-1&&maze[ny][nx]){
+   maze[y+dy/2][x+dx/2]=0;
+   carve(nx,ny);
+  }
+ });
 }
 carve(1,1);
 
-/* ================= WALLS ================= */
+/* ===== WALLS ===== */
 const walls=[];
 const wallGeo=new THREE.BoxGeometry(CELL,5,CELL);
 const wallMat=new THREE.MeshStandardMaterial({color:0x555555});
-
 for(let z=0;z<GRID;z++){
-  for(let x=0;x<GRID;x++){
-    if(maze[z][x]){
-      const w=new THREE.Mesh(wallGeo,wallMat);
-      w.position.set((x-GRID/2)*CELL,2.5,(z-GRID/2)*CELL);
-      scene.add(w);
-      walls.push(w);
-    }
+ for(let x=0;x<GRID;x++){
+  if(maze[z][x]){
+   const w=new THREE.Mesh(wallGeo,wallMat);
+   w.position.set((x-GRID/2)*CELL,2.5,(z-GRID/2)*CELL);
+   scene.add(w); walls.push(w);
   }
+ }
 }
 
-/* ================= FLOOR ================= */
+/* ===== FLOOR ===== */
 const floor=new THREE.Mesh(
-  new THREE.PlaneGeometry(1000,1000),
-  new THREE.MeshStandardMaterial({color:0x222222})
+ new THREE.PlaneGeometry(1000,1000),
+ new THREE.MeshStandardMaterial({color:0x222222})
 );
 floor.rotation.x=-Math.PI/2;
 scene.add(floor);
 
-/* ================= HELPERS ================= */
-function worldToGrid(v){ return Math.floor(v/CELL + GRID/2); }
-function openCell(x,z){ return maze[z]?.[x]===0; }
+/* ===== HELPERS ===== */
+const gridFromWorld=v=>Math.floor(v/CELL+GRID/2);
+const worldFromGrid=v=>(v-GRID/2)*CELL;
+const open=(x,z)=>maze[z]?.[x]===0;
+
 function randomOpen(){
-  while(true){
-    const x=Math.floor(Math.random()*GRID);
-    const z=Math.floor(Math.random()*GRID);
-    if(openCell(x,z)) return {x,z};
-  }
+ while(true){
+  const x=Math.floor(Math.random()*GRID);
+  const z=Math.floor(Math.random()*GRID);
+  if(open(x,z)) return {x,z};
+ }
 }
 
-/* ================= PLAYER ================= */
-const player = {
-  pos:new THREE.Vector3(),
-  yaw:0
-};
-const pSpawn=randomOpen();
-player.pos.set((pSpawn.x-GRID/2)*CELL,1.7,(pSpawn.z-GRID/2)*CELL);
+/* ===== PLAYER ===== */
+const player={pos:new THREE.Vector3(),yaw:0};
+const ps=randomOpen();
+player.pos.set(worldFromGrid(ps.x),1.7,worldFromGrid(ps.z));
 
-/* ================= ENEMY ================= */
+/* ===== ENEMY ===== */
 const enemyMesh=new THREE.Mesh(
-  new THREE.BoxGeometry(2,2,2),
-  new THREE.MeshStandardMaterial({color:0xff4444})
+ new THREE.BoxGeometry(2,2,2),
+ new THREE.MeshStandardMaterial({color:0xff4444})
 );
 scene.add(enemyMesh);
 
-const eSpawn=randomOpen();
-let enemy={
-  gx:eSpawn.x,
-  gz:eSpawn.z
-};
-enemyMesh.position.set(
-  (enemy.gx-GRID/2)*CELL,
-  1,
-  (enemy.gz-GRID/2)*CELL
-);
+let enemy=randomOpen();
+enemyMesh.position.set(worldFromGrid(enemy.x),1,worldFromGrid(enemy.z));
 
-/* ================= INPUT ================= */
-let forward=false;
-addEventListener("keydown",e=>{ if(e.key==="w") forward=true; });
-addEventListener("keyup",e=>{ if(e.key==="w") forward=false; });
+/* ===== A* PATHFINDING ===== */
+function findPath(sx,sz,tx,tz){
+ const openSet=[[sx,sz]];
+ const came={};
+ const key=(x,z)=>x+","+z;
+ const cost={[key(sx,sz)]:0};
 
-document.body.addEventListener("click",()=>{
-  if(document.pointerLockElement!==document.body){
-    document.body.requestPointerLock();
-  }
-});
+ while(openSet.length){
+  const [x,z]=openSet.shift();
+  if(x===tx&&z===tz) break;
 
-addEventListener("mousemove",e=>{
-  if(document.pointerLockElement===document.body){
-    player.yaw -= e.movementX * 0.002;
-  }
-});
+  [[1,0],[-1,0],[0,1],[0,-1]].forEach(([dx,dz])=>{
+   const nx=x+dx, nz=z+dz;
+   if(!open(nx,nz)) return;
+   const k=key(nx,nz);
+   const n=cost[key(x,z)]+1;
+   if(cost[k]===undefined||n<cost[k]){
+    cost[k]=n;
+    came[k]=[x,z];
+    openSet.push([nx,nz]);
+   }
+  });
+ }
 
-/* ================= COLLISION ================= */
-function canMove(x,z){
-  const gx=worldToGrid(x);
-  const gz=worldToGrid(z);
-  return openCell(gx,gz);
+ const path=[];
+ let cur=[tx,tz];
+ while(cur&&!(cur[0]===sx&&cur[1]===sz)){
+  path.push(cur);
+  cur=came[key(cur[0],cur[1])];
+ }
+ return path.reverse();
 }
 
-/* ================= LOOP ================= */
-const speed=0.18;
-const enemySpeed=0.05;
-const fill=document.getElementById("fill");
+let path=[], step=0;
+
+/* ===== INPUT ===== */
+let forward=false;
+addEventListener("keydown",e=>{if(e.key==="w")forward=true});
+addEventListener("keyup",e=>{if(e.key==="w")forward=false});
+
+addEventListener("mousemove",e=>{
+ if(document.pointerLockElement===document.body){
+  player.yaw-=e.movementX*0.002;
+ }
+});
+document.body.onclick=()=>document.body.requestPointerLock();
+
+/* ===== LOOP ===== */
+const speed=0.18, enemySpeed=0.05;
+let timer=0;
 
 function animate(){
-  requestAnimationFrame(animate);
+ requestAnimationFrame(animate);
 
-  /* Player movement (FORWARD ONLY) */
-  if(forward){
-    const nx = player.pos.x - Math.sin(player.yaw)*speed;
-    const nz = player.pos.z - Math.cos(player.yaw)*speed;
-    if(canMove(nx,nz)){
-      player.pos.x = nx;
-      player.pos.z = nz;
-    }
+ if(forward){
+  const nx=player.pos.x-Math.sin(player.yaw)*speed;
+  const nz=player.pos.z-Math.cos(player.yaw)*speed;
+  if(open(gridFromWorld(nx),gridFromWorld(nz))){
+   player.pos.x=nx; player.pos.z=nz;
   }
+ }
 
-  /* Enemy chase */
-  const px=worldToGrid(player.pos.x);
-  const pz=worldToGrid(player.pos.z);
-  const dx=px-enemy.gx;
-  const dz=pz-enemy.gz;
+ timer++;
+ if(timer%30===0){
+  path=findPath(
+   enemy.x,enemy.z,
+   gridFromWorld(player.pos.x),
+   gridFromWorld(player.pos.z)
+  );
+  step=0;
+ }
 
-  if(Math.abs(dx)>Math.abs(dz)) enemy.gx+=Math.sign(dx)*enemySpeed;
-  else enemy.gz+=Math.sign(dz)*enemySpeed;
+ if(path[step]){
+  enemy.x+=Math.sign(path[step][0]-enemy.x)*enemySpeed;
+  enemy.z+=Math.sign(path[step][1]-enemy.z)*enemySpeed;
+  if(Math.abs(enemy.x-path[step][0])<0.1 &&
+     Math.abs(enemy.z-path[step][1])<0.1) step++;
+ }
 
-  enemyMesh.position.x=(enemy.gx-GRID/2)*CELL;
-  enemyMesh.position.z=(enemy.gz-GRID/2)*CELL;
+ enemyMesh.position.set(worldFromGrid(enemy.x),1,worldFromGrid(enemy.z));
 
-  /* Meter */
-  const dist=Math.hypot(px-enemy.gx,pz-enemy.gz);
-  const danger=Math.max(0,1-dist/8);
-  fill.style.width=`${danger*100}%`;
-  fill.style.background=danger>0.7?"red":danger>0.4?"orange":"lime";
-
-  /* Camera POV */
-  camera.position.copy(player.pos);
-  camera.rotation.set(0,player.yaw,0);
-
-  renderer.render(scene,camera);
+ camera.position.copy(player.pos);
+ camera.rotation.set(0,player.yaw,0);
+ renderer.render(scene,camera);
 }
 animate();
 </script>
