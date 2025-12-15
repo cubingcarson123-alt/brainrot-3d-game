@@ -1,6 +1,8 @@
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.module.js";
 
 let gameStarted = true;
+scene.background = new THREE.Color(0x222222);
+
 
 // ===== SCENE =====
 const scene = new THREE.Scene();
