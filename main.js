@@ -1,4 +1,8 @@
-console.log("BRAINROT MAZE RUNNING");
+console.log("BRAINROT MAZE READY");
+
+// ===== SPEEDS =====
+const PLAYER_SPEED = 0.15;
+const ENEMY_SPEED = 0.15;
 
 // ===== SCENE =====
 const scene = new THREE.Scene();
@@ -107,32 +111,50 @@ function blocked(x, z, size = 0.4) {
 
 // ===== GAME LOOP =====
 function animate() {
-  const speed = 0.15;
-
-  // player move
+  // ---- PLAYER MOVE ----
   let px = player.position.x;
   let pz = player.position.z;
 
-  if (keys["w"]) pz -= speed;
-  if (keys["s"]) pz += speed;
-  if (keys["a"]) px -= speed;
-  if (keys["d"]) px += speed;
+  if (keys["w"]) pz -= PLAYER_SPEED;
+  if (keys["s"]) pz += PLAYER_SPEED;
+  if (keys["a"]) px -= PLAYER_SPEED;
+  if (keys["d"]) px += PLAYER_SPEED;
 
   if (!blocked(px, player.position.z)) player.position.x = px;
   if (!blocked(player.position.x, pz)) player.position.z = pz;
 
-  // enemy move
+  // ---- ENEMY MOVE (SMART SLIDE) ----
   const dir = new THREE.Vector3().subVectors(player.position, enemy.position);
   dir.y = 0;
   dir.normalize();
 
-  const ex = enemy.position.x + dir.x * 0.03;
-  const ez = enemy.position.z + dir.z * 0.03;
+  let moved = false;
 
-  if (!blocked(ex, enemy.position.z, 0.5)) enemy.position.x = ex;
-  if (!blocked(enemy.position.x, ez, 0.5)) enemy.position.z = ez;
+  const ex = enemy.position.x + dir.x * ENEMY_SPEED;
+  if (!blocked(ex, enemy.position.z, 0.5)) {
+    enemy.position.x = ex;
+    moved = true;
+  }
 
-  // camera follow
+  const ez = enemy.position.z + dir.z * ENEMY_SPEED;
+  if (!blocked(enemy.position.x, ez, 0.5)) {
+    enemy.position.z = ez;
+    moved = true;
+  }
+
+  // slide if stuck
+  if (!moved) {
+    const slideX = enemy.position.x + Math.sign(dir.z) * ENEMY_SPEED;
+    const slideZ = enemy.position.z + Math.sign(dir.x) * ENEMY_SPEED;
+
+    if (!blocked(slideX, enemy.position.z, 0.5)) {
+      enemy.position.x = slideX;
+    } else if (!blocked(enemy.position.x, slideZ, 0.5)) {
+      enemy.position.z = slideZ;
+    }
+  }
+
+  // ---- CAMERA ----
   camera.position.x = player.position.x;
   camera.position.z = player.position.z + 6;
   camera.lookAt(player.position);
