@@ -4,104 +4,223 @@
 <meta charset="UTF-8" />
 <title>Brainrot Maze</title>
 <style>
-  html,body{margin:0;padding:0;overflow:hidden;background:#000;color:white;font-family:monospace}
-  #ui{position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:5}
-  #meter{width:300px;height:14px;border:2px solid white}
-  #fill{height:100%;width:0%;background:red}
-  #menu{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:black;z-index:10}
-  button{font-size:24px;padding:20px 40px;cursor:pointer}
+  html, body {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background: #000;
+    font-family: Arial, sans-serif;
+    color: white;
+  }
+
+  #menu {
+    position: fixed;
+    inset: 0;
+    background: black;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    z-index: 10;
+  }
+
+  #menu h1 {
+    margin-bottom: 20px;
+    font-size: 40px;
+  }
+
+  #menu button {
+    font-size: 20px;
+    padding: 12px 30px;
+    cursor: pointer;
+  }
+
+  #meter {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 300px;
+    height: 18px;
+    border: 2px solid white;
+  }
+
+  #meterFill {
+    height: 100%;
+    width: 0%;
+    background: red;
+  }
+
+  canvas {
+    display: block;
+  }
 </style>
 </head>
 <body>
-<div id="menu"><button id="start">START</button></div>
-<div id="ui"><div id="meter"><div id="fill"></div></div></div>
-<canvas id="c"></canvas>
 
-<script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+<div id="menu">
+  <h1>BRAINROT MAZE</h1>
+  <button id="startBtn">CLICK TO START</button>
+</div>
+
+<div id="meter">
+  <div id="meterFill"></div>
+</div>
+
+<canvas id="game"></canvas>
+
 <script>
-// ===== SCENE =====
-const canvas = document.getElementById('c');
-const renderer = new THREE.WebGLRenderer({canvas});
-renderer.setSize(innerWidth, innerHeight);
-const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(0x000000, 5, 40);
-const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 1000);
+/* ===================== SETUP ===================== */
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+canvas.width = innerWidth;
+canvas.height = innerHeight;
 
-// ===== LIGHT =====
-scene.add(new THREE.AmbientLight(0xffffff,0.4));
-const light = new THREE.PointLight(0xffffff,1,50);
-scene.add(light);
-
-// ===== PLAYER =====
-const player = new THREE.Object3D();
-player.position.set(2,1.6,2);
-scene.add(player);
-player.add(camera);
-light.position.copy(player.position);
-
-let yaw=0,pitch=0;
-const speed=0.08;
-let keys={};
-
-// ===== MAZE =====
-const walls=[];
-const size=25, cell=4;
-const grid=[...Array(size)].map(()=>Array(size).fill(1));
-function carve(x,y){grid[y][x]=0;[[1,0],[-1,0],[0,1],[0,-1]].sort(()=>Math.random()-0.5).forEach(([dx,dy])=>{let nx=x+dx*2,ny=y+dy*2;if(grid[ny]?.[nx]===1){grid[y+dy][x+dx]=0;carve(nx,ny);}})}
-carve(1,1);
-const wallGeo=new THREE.BoxGeometry(cell,3,cell);
-const wallMat=new THREE.MeshStandardMaterial({color:0x444444});
-for(let y=0;y<size;y++)for(let x=0;x<size;x++)if(grid[y][x]){let w=new THREE.Mesh(wallGeo,wallMat);w.position.set(x*cell,1.5,y*cell);scene.add(w);walls.push(w);} 
-
-// ===== ENEMY =====
-const enemy=new THREE.Mesh(new THREE.BoxGeometry(1.5,1.5,1.5),new THREE.MeshStandardMaterial({color:0xff0000}));
-enemy.position.set((size-2)*cell,0.75,(size-2)*cell);
-scene.add(enemy);
-let meter=0;
-
-// ===== INPUT =====
-document.addEventListener('keydown',e=>keys[e.key.toLowerCase()]=true);
-document.addEventListener('keyup',e=>keys[e.key.toLowerCase()]=false);
-canvas.addEventListener('click',()=>canvas.requestPointerLock());
-document.addEventListener('mousemove',e=>{
- if(document.pointerLockElement===canvas){
-  yaw-=e.movementX*0.002;
-  pitch-=e.movementY*0.002;
-  pitch=Math.max(-1.5,Math.min(1.5,pitch));
- }
+addEventListener("resize", () => {
+  canvas.width = innerWidth;
+  canvas.height = innerHeight;
 });
 
-// ===== COLLISION =====
-function blocked(nx,nz){return walls.some(w=>Math.abs(w.position.x-nx)<cell/2 && Math.abs(w.position.z-nz)<cell/2);} 
+let started = false;
 
-// ===== LOOP =====
-function loop(){
- requestAnimationFrame(loop);
- camera.rotation.set(pitch,yaw,0);
- if(keys['w']){
-  const nx=player.position.x+Math.sin(yaw)*speed;
-  const nz=player.position.z+Math.cos(yaw)*speed;
-  if(!blocked(nx,nz)){player.position.x=nx;player.position.z=nz;}
- }
- // enemy chase
- const dx=player.position.x-enemy.position.x;
- const dz=player.position.z-enemy.position.z;
- const dist=Math.hypot(dx,dz);
- enemy.position.x+=dx/dist*0.04;
- enemy.position.z+=dz/dist*0.04;
- // meter
- if(dist<12) meter=Math.min(100,meter+0.4); else meter=Math.max(0,meter-0.2);
- document.getElementById('fill').style.width=meter+'%';
- // jumpscare
- if(dist<1){alert('BRAINROT GOT YOU');location.reload();}
- renderer.render(scene,camera);
+/* ===================== MAZE ===================== */
+const CELL = 120; // BIG corridors
+const MAZE_W = 15;
+const MAZE_H = 15;
+
+const maze = Array.from({ length: MAZE_H }, () =>
+  Array.from({ length: MAZE_W }, () => Math.random() < 0.35 ? 1 : 0)
+);
+maze[1][1] = 0;
+
+/* ===================== PLAYER ===================== */
+const player = {
+  x: CELL * 1.5,
+  y: CELL * 1.5,
+  angle: 0,
+  speed: 2.5,
+  radius: 18
+};
+
+/* ===================== ENEMY (BRAINROT) ===================== */
+const brainrot = {
+  x: CELL * (MAZE_W - 2),
+  y: CELL * (MAZE_H - 2),
+  speed: 1.2
+};
+
+/* ===================== INPUT ===================== */
+let mouseLocked = false;
+let forward = false;
+
+document.addEventListener("mousemove", e => {
+  if (!mouseLocked) return;
+  player.angle += e.movementX * 0.002;
+});
+
+document.addEventListener("keydown", e => {
+  if (e.key === "w") forward = true;
+});
+
+document.addEventListener("keyup", e => {
+  if (e.key === "w") forward = false;
+});
+
+/* ===================== COLLISION ===================== */
+function wallAt(x, y) {
+  const mx = Math.floor(x / CELL);
+  const my = Math.floor(y / CELL);
+  return maze[my]?.[mx] === 1;
 }
 
-// ===== START =====
-document.getElementById('start').onclick=()=>{
- document.getElementById('menu').style.display='none';
- loop();
+function moveEntity(ent, dx, dy) {
+  if (!wallAt(ent.x + dx, ent.y)) ent.x += dx;
+  if (!wallAt(ent.x, ent.y + dy)) ent.y += dy;
 }
+
+/* ===================== GAME LOOP ===================== */
+function update() {
+  if (!started) return;
+
+  // Player move
+  if (forward) {
+    const dx = Math.cos(player.angle) * player.speed;
+    const dy = Math.sin(player.angle) * player.speed;
+    moveEntity(player, dx, dy);
+  }
+
+  // Enemy simple roaming + chase
+  const dx = player.x - brainrot.x;
+  const dy = player.y - brainrot.y;
+  const dist = Math.hypot(dx, dy);
+
+  const ex = (dx / dist) * brainrot.speed;
+  const ey = (dy / dist) * brainrot.speed;
+
+  moveEntity(brainrot, ex, ey);
+
+  // Meter
+  const meter = Math.max(0, 1 - dist / 600);
+  document.getElementById("meterFill").style.width = `${meter * 100}%`;
+}
+
+/* ===================== RENDER ===================== */
+function draw() {
+  ctx.fillStyle = "#111";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Fake 3D top-down render
+  ctx.save();
+  ctx.translate(canvas.width / 2, canvas.height / 2);
+  ctx.rotate(-player.angle);
+  ctx.translate(-player.x, -player.y);
+
+  // Floor
+  ctx.fillStyle = "#080808";
+  ctx.fillRect(0, 0, MAZE_W * CELL, MAZE_H * CELL);
+
+  // Walls
+  ctx.fillStyle = "#333";
+  for (let y = 0; y < MAZE_H; y++) {
+    for (let x = 0; x < MAZE_W; x++) {
+      if (maze[y][x]) {
+        ctx.fillRect(x * CELL, y * CELL, CELL, CELL);
+      }
+    }
+  }
+
+  // Brainrot
+  ctx.fillStyle = "red";
+  ctx.fillRect(brainrot.x - 20, brainrot.y - 20, 40, 40);
+
+  ctx.restore();
+
+  // Crosshair
+  ctx.strokeStyle = "white";
+  ctx.beginPath();
+  ctx.moveTo(canvas.width/2 - 5, canvas.height/2);
+  ctx.lineTo(canvas.width/2 + 5, canvas.height/2);
+  ctx.stroke();
+}
+
+/* ===================== LOOP ===================== */
+function loop() {
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+loop();
+
+/* ===================== START ===================== */
+document.getElementById("startBtn").onclick = () => {
+  document.getElementById("menu").style.display = "none";
+  canvas.requestPointerLock();
+};
+
+document.addEventListener("pointerlockchange", () => {
+  mouseLocked = document.pointerLockElement === canvas;
+  started = mouseLocked;
+});
 </script>
 </body>
 </html>
