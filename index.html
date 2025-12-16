@@ -2,41 +2,29 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Survive a BRAINROT</title>
+<title>Brainrot Maze</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
 <style>
-  body { margin: 0; overflow: hidden; background: black; }
-  canvas { display: block; }
+  body { margin:0; overflow:hidden; background:#000; }
+  canvas { display:block; }
   #meter {
     position: fixed;
     bottom: 20px;
     left: 50%;
     transform: translateX(-50%);
-    width: 220px;
-    height: 18px;
+    width: 300px;
+    height: 14px;
     border: 2px solid white;
-    background: #222;
   }
   #fill {
     height: 100%;
     width: 0%;
     background: red;
   }
-  #hint {
-    position: fixed;
-    top: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    color: white;
-    font-family: monospace;
-    opacity: 0.7;
-  }
 </style>
 </head>
-
 <body>
-<div id="hint">Click to lock mouse · W to move</div>
+
 <div id="meter"><div id="fill"></div></div>
 
 <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
@@ -45,145 +33,171 @@
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x111111);
 
-const camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.1, 1000);
-const renderer = new THREE.WebGLRenderer({ antialias: true });
+const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 1000);
+const renderer = new THREE.WebGLRenderer({ antialias:true });
 renderer.setSize(innerWidth, innerHeight);
 document.body.appendChild(renderer.domElement);
 
-addEventListener("resize", () => {
-  camera.aspect = innerWidth / innerHeight;
+window.addEventListener('resize', ()=>{
+  camera.aspect = innerWidth/innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
 });
 
-scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-const light = new THREE.DirectionalLight(0xffffff, 0.6);
-light.position.set(5, 10, 5);
-scene.add(light);
+scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+const sun = new THREE.DirectionalLight(0xffffff, 0.6);
+sun.position.set(10,20,10);
+scene.add(sun);
 
 /* ================= MAZE ================= */
-const GRID = 21;
-const CELL = 10; // VERY WIDE
-const maze = Array.from({ length: GRID }, () => Array(GRID).fill(1));
+const GRID = 25;
+const CELL = 8;        // BIG corridors
+const WALL_H = 6;
 
-function carve(x, y) {
-  maze[y][x] = 0;
-  const dirs = [[2,0],[-2,0],[0,2],[0,-2]].sort(() => Math.random() - 0.5);
-  for (const [dx, dy] of dirs) {
-    const nx = x + dx, ny = y + dy;
-    if (nx > 0 && ny > 0 && nx < GRID-1 && ny < GRID-1 && maze[ny][nx]) {
-      maze[y + dy/2][x + dx/2] = 0;
-      carve(nx, ny);
+const maze = Array.from({length:GRID},()=>Array(GRID).fill(1));
+
+function carve(x,y){
+  maze[y][x]=0;
+  const dirs=[[2,0],[-2,0],[0,2],[0,-2]].sort(()=>Math.random()-0.5);
+  for(const[dX,dY]of dirs){
+    const nx=x+dX, ny=y+dY;
+    if(nx>0&&ny>0&&nx<GRID-1&&ny<GRID-1&&maze[ny][nx]){
+      maze[y+dY/2][x+dX/2]=0;
+      carve(nx,ny);
     }
   }
 }
 carve(1,1);
 
-const wallGeo = new THREE.BoxGeometry(CELL, 6, CELL);
-const wallMat = new THREE.MeshStandardMaterial({ color: 0x555555 });
+const wallGeo = new THREE.BoxGeometry(CELL, WALL_H, CELL);
+const wallMat = new THREE.MeshStandardMaterial({color:0x555555});
 
-for (let z = 0; z < GRID; z++) {
-  for (let x = 0; x < GRID; x++) {
-    if (maze[z][x]) {
-      const w = new THREE.Mesh(wallGeo, wallMat);
-      w.position.set((x - GRID/2) * CELL, 3, (z - GRID/2) * CELL);
+for(let z=0;z<GRID;z++){
+  for(let x=0;x<GRID;x++){
+    if(maze[z][x]){
+      const w=new THREE.Mesh(wallGeo,wallMat);
+      w.position.set(
+        (x-GRID/2)*CELL,
+        WALL_H/2,
+        (z-GRID/2)*CELL
+      );
       scene.add(w);
     }
   }
 }
 
-/* ================= FLOOR ================= */
 const floor = new THREE.Mesh(
-  new THREE.PlaneGeometry(1000, 1000),
-  new THREE.MeshStandardMaterial({ color: 0x222222 })
+  new THREE.PlaneGeometry(1000,1000),
+  new THREE.MeshStandardMaterial({color:0x222222})
 );
-floor.rotation.x = -Math.PI / 2;
+floor.rotation.x=-Math.PI/2;
 scene.add(floor);
 
 /* ================= PLAYER ================= */
 const player = new THREE.Object3D();
-player.position.set(-(GRID/2-2)*CELL, 1.7, -(GRID/2-2)*CELL);
+player.position.set(
+  -(GRID/2-1)*CELL,
+  0,
+  -(GRID/2-1)*CELL
+);
 scene.add(player);
+
+const PLAYER_RADIUS = 1.4;
+const speed = 0.18;
 
 /* ================= ENEMY ================= */
 const enemy = new THREE.Mesh(
-  new THREE.BoxGeometry(3, 3, 3),
-  new THREE.MeshStandardMaterial({ color: 0xff3333 })
+  new THREE.BoxGeometry(3,3,3),
+  new THREE.MeshStandardMaterial({color:0xff3333})
 );
-enemy.position.set((GRID/2-2)*CELL, 1.5, (GRID/2-2)*CELL);
+enemy.position.set(
+  (GRID/2-2)*CELL,
+  1.5,
+  (GRID/2-2)*CELL
+);
 scene.add(enemy);
 
+const enemySpeed = 0.11;
+
 /* ================= COLLISION ================= */
-function blocked(x, z) {
-  const gx = Math.floor(x / CELL + GRID / 2);
-  const gz = Math.floor(z / CELL + GRID / 2);
-  return maze[gz]?.[gx] === 1;
+function blocked(x,z){
+  const checks=[
+    [x+PLAYER_RADIUS,z],
+    [x-PLAYER_RADIUS,z],
+    [x,z+PLAYER_RADIUS],
+    [x,z-PLAYER_RADIUS]
+  ];
+  for(const[cx,cz]of checks){
+    const gx=Math.floor(cx/CELL+GRID/2);
+    const gz=Math.floor(cz/CELL+GRID/2);
+    if(maze[gz]?.[gx]===1) return true;
+  }
+  return false;
 }
 
-/* ================= MOUSE LOCK ================= */
-let yaw = 0;
-document.body.addEventListener("click", () => {
-  document.body.requestPointerLock();
+/* ================= INPUT ================= */
+const keys={};
+addEventListener('keydown',e=>keys[e.key.toLowerCase()]=true);
+addEventListener('keyup',e=>keys[e.key.toLowerCase()]=false);
+
+document.body.addEventListener('click',()=>{
+  renderer.domElement.requestPointerLock();
 });
 
-addEventListener("mousemove", e => {
-  if (document.pointerLockElement) {
-    yaw -= e.movementX * 0.002;
+let yaw=0;
+addEventListener('mousemove',e=>{
+  if(document.pointerLockElement){
+    yaw -= e.movementX*0.002;
   }
 });
 
-/* ================= INPUT ================= */
-const keys = {};
-addEventListener("keydown", e => keys[e.key.toLowerCase()] = true);
-addEventListener("keyup", e => keys[e.key.toLowerCase()] = false);
-
-/* ================= GAME LOOP ================= */
-const playerSpeed = 0.25;
-const enemySpeed = 0.16;
-const fill = document.getElementById("fill");
-
-function animate() {
+/* ================= LOOP ================= */
+function animate(){
   requestAnimationFrame(animate);
 
-  // PLAYER MOVE (W ONLY)
-  let nx = player.position.x;
-  let nz = player.position.z;
+  const dir = new THREE.Vector3(
+    Math.sin(yaw),0,Math.cos(yaw)
+  ).normalize();
 
-  if (keys.w) {
-    nx += Math.sin(yaw) * playerSpeed;
-    nz += Math.cos(yaw) * playerSpeed;
-  }
-
-  if (!blocked(nx, nz)) {
-    player.position.x = nx;
-    player.position.z = nz;
-  }
-
-  // ENEMY CHASE (NO WALL CLIP)
-  const dx = player.position.x - enemy.position.x;
-  const dz = player.position.z - enemy.position.z;
-  const dist = Math.hypot(dx, dz);
-
-  if (dist > 0.1) {
-    const ex = enemy.position.x + (dx / dist) * enemySpeed;
-    const ez = enemy.position.z + (dz / dist) * enemySpeed;
-    if (!blocked(ex, ez)) {
-      enemy.position.x = ex;
-      enemy.position.z = ez;
+  if(keys.w){
+    const nx=player.position.x+dir.x*speed;
+    const nz=player.position.z+dir.z*speed;
+    if(!blocked(nx,nz)){
+      player.position.x=nx;
+      player.position.z=nz;
     }
   }
 
-  // BRAINROT METER
-  const danger = Math.max(0, 1 - dist / 60);
-  fill.style.width = `${danger * 100}%`;
+  // camera POV
+  camera.position.set(
+    player.position.x,
+    1.7,
+    player.position.z
+  );
+  camera.lookAt(
+    player.position.x+dir.x,
+    1.7,
+    player.position.z+dir.z
+  );
 
-  // CAMERA POV
-  camera.position.set(player.position.x, player.position.y + 1.4, player.position.z);
-  camera.rotation.set(0, yaw, 0);
+  // enemy chase (NO wall pass)
+  const dx=player.position.x-enemy.position.x;
+  const dz=player.position.z-enemy.position.z;
+  const len=Math.hypot(dx,dz)||1;
+  const ex=enemy.position.x+dx/len*enemySpeed;
+  const ez=enemy.position.z+dz/len*enemySpeed;
+  if(!blocked(ex,ez)){
+    enemy.position.x=ex;
+    enemy.position.z=ez;
+  }
 
-  renderer.render(scene, camera);
+  // proximity meter
+  const dist=Math.min(40,Math.hypot(dx,dz));
+  document.getElementById("fill").style.width =
+    ((40-dist)/40*100)+"%";
+
+  renderer.render(scene,camera);
 }
-
 animate();
 </script>
 </body>
