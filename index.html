@@ -2,167 +2,174 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Brainrot Chase</title>
+<title>Brainrot Maze Chase</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
 <style>
-body{margin:0;overflow:hidden;background:black}
-#ui{
- position:fixed;
- top:10px;left:10px;
- color:white;font-family:monospace;
- z-index:10
-}
-#meter{width:220px;height:14px;background:#333;border:1px solid #777;margin-top:6px}
-#fill{height:100%;width:0%;background:lime;transition:width .1s}
-#hint{
- position:fixed;bottom:10px;left:50%;
- transform:translateX(-50%);
- color:#aaa;font-family:monospace
-}
+  body { margin: 0; overflow: hidden; background: black; }
+  canvas { display: block; }
+  #meter {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 220px;
+    height: 20px;
+    border: 2px solid white;
+    background: #222;
+  }
+  #fill {
+    height: 100%;
+    width: 0%;
+    background: red;
+    transition: width 0.15s;
+  }
 </style>
 </head>
-<body>
 
-<div id="ui">
-Brainrot Nearby
+<body>
 <div id="meter"><div id="fill"></div></div>
-</div>
-<div id="hint">Click • W to move • Mouse to look</div>
 
 <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
 <script>
-/* ===== SETUP ===== */
-const scene=new THREE.Scene();
-scene.background=new THREE.Color(0x0a0a0a);
+/* ================= SETUP ================= */
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x111111);
 
-const camera=new THREE.PerspectiveCamera(75,innerWidth/innerHeight,0.1,1000);
-const renderer=new THREE.WebGLRenderer({antialias:true});
-renderer.setSize(innerWidth,innerHeight);
+const camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.1, 1000);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
 document.body.appendChild(renderer.domElement);
 
-addEventListener("resize",()=>{
- camera.aspect=innerWidth/innerHeight;
- camera.updateProjectionMatrix();
- renderer.setSize(innerWidth,innerHeight);
+addEventListener("resize", () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
 });
 
-scene.add(new THREE.AmbientLight(0xffffff,.6));
-const sun=new THREE.DirectionalLight(0xffffff,.6);
-sun.position.set(5,10,5);
-scene.add(sun);
+scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+const light = new THREE.DirectionalLight(0xffffff, 0.6);
+light.position.set(5, 10, 5);
+scene.add(light);
 
-/* ===== MAZE (BIG CORRIDORS) ===== */
-const walls=[];
-const wallGeo=new THREE.BoxGeometry(12,6,12);
-const wallMat=new THREE.MeshStandardMaterial({color:0x444444});
+/* ================= MAZE ================= */
+const GRID = 21;
+const CELL = 8;          // WIDE corridors
+const maze = Array.from({ length: GRID }, () => Array(GRID).fill(1));
 
-function wall(x,z){
- const w=new THREE.Mesh(wallGeo,wallMat);
- w.position.set(x,3,z);
- scene.add(w); walls.push(w);
+function carve(x, y) {
+  maze[y][x] = 0;
+  const dirs = [[2,0],[-2,0],[0,2],[0,-2]].sort(() => Math.random() - 0.5);
+  for (const [dx, dy] of dirs) {
+    const nx = x + dx, ny = y + dy;
+    if (nx > 0 && ny > 0 && nx < GRID-1 && ny < GRID-1 && maze[ny][nx]) {
+      maze[y + dy/2][x + dx/2] = 0;
+      carve(nx, ny);
+    }
+  }
+}
+carve(1,1);
+
+const walls = [];
+const wallGeo = new THREE.BoxGeometry(CELL, 6, CELL);
+const wallMat = new THREE.MeshStandardMaterial({ color: 0x555555 });
+
+for (let z = 0; z < GRID; z++) {
+  for (let x = 0; x < GRID; x++) {
+    if (maze[z][x]) {
+      const w = new THREE.Mesh(wallGeo, wallMat);
+      w.position.set((x - GRID/2) * CELL, 3, (z - GRID/2) * CELL);
+      scene.add(w);
+      walls.push(w);
+    }
+  }
 }
 
-// outer
-for(let i=-60;i<=60;i+=12){ wall(i,-60); wall(i,60); }
-for(let i=-48;i<=48;i+=12){ wall(-60,i); wall(60,i); }
-
-// inner twists
-for(let i=-36;i<=36;i+=12){
- if(i!==0) wall(i,-12);
- if(i!==12) wall(i,24);
-}
-wall(-24,12); wall(24,12);
-
-/* floor */
-const floor=new THREE.Mesh(
- new THREE.PlaneGeometry(500,500),
- new THREE.MeshStandardMaterial({color:0x111111})
+/* ================= FLOOR ================= */
+const floor = new THREE.Mesh(
+  new THREE.PlaneGeometry(1000, 1000),
+  new THREE.MeshStandardMaterial({ color: 0x222222 })
 );
-floor.rotation.x=-Math.PI/2;
+floor.rotation.x = -Math.PI / 2;
 scene.add(floor);
 
-/* ===== PLAYER ===== */
-const player={
- pos:new THREE.Vector3(0,1.7,40),
- yaw:0,
- speed:.18
-};
+/* ================= PLAYER ================= */
+const player = new THREE.Mesh(
+  new THREE.BoxGeometry(3, 3, 3),
+  new THREE.MeshStandardMaterial({ color: 0x4aa3ff })
+);
+player.position.set(-(GRID/2-2)*CELL, 1.5, -(GRID/2-2)*CELL);
+scene.add(player);
 
-let forward=false;
-addEventListener("keydown",e=>{if(e.key==="w")forward=true});
-addEventListener("keyup",e=>{if(e.key==="w")forward=false});
+/* ================= ENEMY ================= */
+const enemy = new THREE.Mesh(
+  new THREE.BoxGeometry(3, 3, 3),
+  new THREE.MeshStandardMaterial({ color: 0xff3333 })
+);
+enemy.position.set((GRID/2-2)*CELL, 1.5, (GRID/2-2)*CELL);
+scene.add(enemy);
 
-document.body.onclick=()=>{
- if(document.pointerLockElement!==document.body)
-  document.body.requestPointerLock();
-};
-addEventListener("mousemove",e=>{
- if(document.pointerLockElement===document.body)
-  player.yaw-=e.movementX*.002;
-});
-
-/* ===== ENEMY ===== */
-const enemy={
- mesh:new THREE.Mesh(
-  new THREE.BoxGeometry(3,3,3),
-  new THREE.MeshStandardMaterial({color:0xff3333})
- ),
- speed:.07
-};
-enemy.mesh.position.set(0,1.5,-40);
-scene.add(enemy.mesh);
-
-/* ===== COLLISION ===== */
-const ray=new THREE.Raycaster();
-function blocked(pos,dir){
- ray.set(pos,dir.normalize());
- const hit=ray.intersectObjects(walls);
- return hit.length && hit[0].distance<1.4;
+/* ================= COLLISION ================= */
+function blocked(x, z) {
+  const gx = Math.floor(x / CELL + GRID / 2);
+  const gz = Math.floor(z / CELL + GRID / 2);
+  return maze[gz]?.[gx] === 1;
 }
 
-/* ===== LOOP ===== */
-const fill=document.getElementById("fill");
+/* ================= CONTROLS ================= */
+const keys = {};
+addEventListener("keydown", e => keys[e.key.toLowerCase()] = true);
+addEventListener("keyup", e => keys[e.key.toLowerCase()] = false);
 
-function animate(){
- requestAnimationFrame(animate);
+/* ================= GAME ================= */
+const playerSpeed = 0.25;
+const enemySpeed  = 0.18;
+const fill = document.getElementById("fill");
 
- // PLAYER MOVE
- if(forward){
-  const dir=new THREE.Vector3(
-   -Math.sin(player.yaw),0,-Math.cos(player.yaw)
-  );
-  if(!blocked(player.pos,dir))
-   player.pos.add(dir.multiplyScalar(player.speed));
- }
+function animate() {
+  requestAnimationFrame(animate);
 
- // ENEMY CHASE (NO WALL CHEAT)
- const toPlayer=player.pos.clone().sub(enemy.mesh.position);
- toPlayer.y=0;
- const dist=toPlayer.length();
+  let px = player.position.x;
+  let pz = player.position.z;
 
- if(dist>1){
-  const dir=toPlayer.normalize();
-  if(!blocked(enemy.mesh.position,dir)){
-   enemy.mesh.position.add(dir.multiplyScalar(enemy.speed));
-  }else{
-   // slide along wall instead of clipping
-   enemy.mesh.position.x+=dir.z*enemy.speed;
-   enemy.mesh.position.z-=dir.x*enemy.speed;
+  if (keys.w) pz -= playerSpeed;
+  if (keys.s) pz += playerSpeed;
+  if (keys.a) px -= playerSpeed;
+  if (keys.d) px += playerSpeed;
+
+  if (!blocked(px, pz)) {
+    player.position.x = px;
+    player.position.z = pz;
   }
- }
 
- // METER (REAL SUSPENSE)
- const danger=Math.max(0,1-dist/35);
- fill.style.width=(danger*100)+"%";
- fill.style.background=
-  danger>.7?"red":danger>.4?"orange":"lime";
+  // ENEMY CHASE (WALL-AWARE)
+  const dx = player.position.x - enemy.position.x;
+  const dz = player.position.z - enemy.position.z;
+  const dist = Math.hypot(dx, dz);
 
- // CAMERA POV
- camera.position.copy(player.pos);
- camera.rotation.set(0,player.yaw,0);
+  let ex = enemy.position.x + (dx / dist) * enemySpeed;
+  let ez = enemy.position.z + (dz / dist) * enemySpeed;
 
- renderer.render(scene,camera);
+  if (!blocked(ex, ez)) {
+    enemy.position.x = ex;
+    enemy.position.z = ez;
+  }
+
+  // BRAINROT METER
+  const danger = Math.max(0, 1 - dist / 60);
+  fill.style.width = `${danger * 100}%`;
+
+  // CAMERA (PLAYER POV-ish)
+  camera.position.set(
+    player.position.x,
+    6,
+    player.position.z + 10
+  );
+  camera.lookAt(player.position);
+
+  renderer.render(scene, camera);
 }
+
 animate();
 </script>
 </body>
