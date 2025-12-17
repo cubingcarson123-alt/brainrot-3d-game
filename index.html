@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>Maze Escape 3</title>
+<title>Maze Escape</title>
 <style>
 html,body{margin:0;overflow:hidden;background:#000}
 canvas{display:block}
@@ -49,7 +49,7 @@ const m=document.getElementById("map"),mctx=m.getContext("2d");
 resize();addEventListener("resize",resize);
 function resize(){c.width=innerWidth;c.height=innerHeight}
 
-/* ===== EASY MAZE (BEATABLE) ===== */
+/* ===== MAZE ===== */
 const mapData=[
 "####################",
 "#.................E#",
@@ -63,12 +63,17 @@ const mapData=[
 ];
 const MW=mapData[0].length, MH=mapData.length;
 
-/* ===== PLAYER ===== */
-let p={x:1.5,y:1.5,a:0};
+/* ===== PLAYER (FIXED SPAWN) ===== */
+let p={x:1.5,y:7.5,a:0}; // FAR FROM EXIT
 let W=false,locked=false;
 
-/* ===== CPU ===== */
-let cpu={x:10.5,y:5.5,a:Math.random()*6.28,s:0.008};
+/* ===== CPU (FIXED SPAWN + ROAM) ===== */
+let cpu={
+ x:9.5,
+ y:5.5, // OPEN AREA
+ a:Math.random()*6.28,
+ s:0.01
+};
 
 /* ===== STATE ===== */
 let danger=0,dead=false,won=false;
@@ -92,6 +97,7 @@ function wall(x,y){return tile(x,y)==="#"}
 function update(){
  if(dead||won)return;
 
+ // Player movement
  if(W){
   let nx=p.x+Math.cos(p.a)*0.05;
   let ny=p.y+Math.sin(p.a)*0.05;
@@ -99,17 +105,25 @@ function update(){
   if(!wall(p.x,ny))p.y=ny;
  }
 
+ // Win
  if(tile(p.x,p.y)==="E"){
   won=true;
   document.exitPointerLock();
   document.getElementById("win").style.display="flex";
  }
 
+ // CPU roam (won't trap)
  let nx=cpu.x+Math.cos(cpu.a)*cpu.s;
  let ny=cpu.y+Math.sin(cpu.a)*cpu.s;
- if(wall(nx,ny)) cpu.a=Math.random()*6.28;
- else{cpu.x=nx;cpu.y=ny;}
 
+ if(wall(nx,ny)){
+  cpu.a+=Math.PI/2 + Math.random(); // TURN AWAY
+ }else{
+  cpu.x=nx;
+  cpu.y=ny;
+ }
+
+ // Danger meter
  let d=Math.hypot(p.x-cpu.x,p.y-cpu.y);
  danger=Math.min(100,100-d*10);
  document.getElementById("fill").style.width=danger+"%";
@@ -123,7 +137,8 @@ function update(){
 
 /* ===== 3D RENDER ===== */
 function render3D(){
- ctx.fillStyle="#000";ctx.fillRect(0,0,c.width,c.height);
+ ctx.fillStyle="#000";
+ ctx.fillRect(0,0,c.width,c.height);
  const fov=Math.PI/3;
 
  for(let i=0;i<c.width;i++){
@@ -134,6 +149,7 @@ function render3D(){
    dist+=0.03;
    let rx=p.x+Math.cos(ra)*dist;
    let ry=p.y+Math.sin(ra)*dist;
+
    if(Math.hypot(rx-cpu.x,ry-cpu.y)<0.7){hitCPU=true;break;}
    if(tile(rx,ry)==="E"){hitExit=true;break;}
    if(wall(rx,ry))break;
