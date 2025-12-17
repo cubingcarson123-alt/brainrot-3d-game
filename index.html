@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>Maze Escape 2</title>
+<title>Maze Escape</title>
 <style>
 html,body{margin:0;overflow:hidden;background:#000}
 canvas{display:block}
@@ -13,10 +13,7 @@ canvas{display:block}
  background:#000;color:#fff;font-family:sans-serif;
  z-index:10
 }
-
-#menu button{
- font-size:28px;padding:14px 36px;cursor:pointer
-}
+#menu button{font-size:26px;padding:12px 30px;cursor:pointer}
 
 #meter{
  position:fixed;bottom:20px;left:50%;
@@ -25,6 +22,13 @@ canvas{display:block}
  z-index:5
 }
 #fill{height:100%;width:0;background:red}
+
+#map{
+ position:fixed;top:15px;right:15px;
+ width:160px;height:160px;
+ background:#111;border:2px solid #fff;
+ z-index:6
+}
 
 #win,#scare{display:none;font-size:60px}
 </style>
@@ -35,17 +39,18 @@ canvas{display:block}
 <div id="win">YOU ESCAPED 🎉</div>
 <div id="scare">👹</div>
 <div id="meter"><div id="fill"></div></div>
-
+<canvas id="map"></canvas>
 <canvas id="c"></canvas>
 
 <script>
-/* ================= SETUP ================= */
+/* ========== SETUP ========== */
 const c=document.getElementById("c"),ctx=c.getContext("2d");
+const m=document.getElementById("map"),mctx=m.getContext("2d");
 resize();addEventListener("resize",resize);
 function resize(){c.width=innerWidth;c.height=innerHeight}
 
-/* ================= MAZE ================= */
-const map=[
+/* ========== MAZE ========== */
+const mapData=[
 "############################",
 "#............#.............#",
 "#.######.#####.#.######.###.#",
@@ -58,22 +63,19 @@ const map=[
 "#.................#........E#",
 "############################"
 ];
+const MW=mapData[0].length, MH=mapData.length;
 
-/* ================= PLAYER ================= */
+/* ========== PLAYER ========== */
 let p={x:1.5,y:1.5,a:0};
 let W=false,locked=false;
 
-/* ================= CPU (VISIBLE) ================= */
-let cpu={
- x:14.5,y:6.5,
- a:Math.random()*Math.PI*2,
- s:0.01
-};
+/* ========== CPU ========== */
+let cpu={x:14.5,y:6.5,a:Math.random()*6.28,s:0.01};
 
-/* ================= STATE ================= */
+/* ========== STATE ========== */
 let danger=0,dead=false,won=false;
 
-/* ================= INPUT ================= */
+/* ========== INPUT ========== */
 onkeydown=e=>{if(e.key==="w")W=true}
 onkeyup=e=>{if(e.key==="w")W=false}
 
@@ -81,20 +83,17 @@ c.onclick=()=>c.requestPointerLock();
 document.onpointerlockchange=()=>locked=document.pointerLockElement===c;
 document.onmousemove=e=>{
  if(!locked)return;
- p.a-=e.movementX*0.00025; // FIXED SENSITIVITY
+ p.a-=e.movementX*0.00025;
 };
 
-/* ================= HELPERS ================= */
-function tile(x,y){
- return map[Math.floor(y)]?.[Math.floor(x)];
-}
+/* ========== HELPERS ========== */
+function tile(x,y){return mapData[Math.floor(y)]?.[Math.floor(x)]}
 function wall(x,y){return tile(x,y)==="#"}
 
-/* ================= UPDATE ================= */
+/* ========== UPDATE ========== */
 function update(){
  if(dead||won)return;
 
- // Player move
  if(W){
   let nx=p.x+Math.cos(p.a)*0.045;
   let ny=p.y+Math.sin(p.a)*0.045;
@@ -102,23 +101,17 @@ function update(){
   if(!wall(p.x,ny))p.y=ny;
  }
 
- // Exit
  if(tile(p.x,p.y)==="E"){
   won=true;
   document.exitPointerLock();
   document.getElementById("win").style.display="flex";
  }
 
- // CPU roaming (always visible)
  let nx=cpu.x+Math.cos(cpu.a)*cpu.s;
  let ny=cpu.y+Math.sin(cpu.a)*cpu.s;
- if(wall(nx,ny)){
-  cpu.a=Math.random()*Math.PI*2;
- }else{
-  cpu.x=nx;cpu.y=ny;
- }
+ if(wall(nx,ny)) cpu.a=Math.random()*6.28;
+ else{cpu.x=nx;cpu.y=ny;}
 
- // Danger meter
  let d=Math.hypot(p.x-cpu.x,p.y-cpu.y);
  danger=Math.min(100,100-d*8);
  document.getElementById("fill").style.width=danger+"%";
@@ -130,11 +123,9 @@ function update(){
  }
 }
 
-/* ================= RENDER ================= */
-function render(){
- ctx.fillStyle="#000";
- ctx.fillRect(0,0,c.width,c.height);
-
+/* ========== RENDER 3D ========== */
+function render3D(){
+ ctx.fillStyle="#000";ctx.fillRect(0,0,c.width,c.height);
  const fov=Math.PI/3;
 
  for(let i=0;i<c.width;i++){
@@ -142,36 +133,58 @@ function render(){
   let dist=0,hitCPU=false,hitExit=false;
 
   while(dist<30){
-   dist+=0.025;
+   dist+=0.03;
    let rx=p.x+Math.cos(ra)*dist;
    let ry=p.y+Math.sin(ra)*dist;
-
    if(Math.hypot(rx-cpu.x,ry-cpu.y)<0.7){hitCPU=true;break;}
    if(tile(rx,ry)==="E"){hitExit=true;break;}
    if(wall(rx,ry))break;
   }
 
   let h=c.height/(dist*0.6);
-
-  if(hitCPU) ctx.fillStyle="red";       // CPU CLEAR
-  else if(hitExit) ctx.fillStyle="lime";// EXIT CLEAR
-  else{
-   let s=200-dist*15;
-   ctx.fillStyle=`rgb(${s},${s},${s})`;
-  }
-
+  ctx.fillStyle=hitCPU?"red":hitExit?"lime":`rgb(${200-dist*15},${200-dist*15},${200-dist*15})`;
   ctx.fillRect(i,(c.height-h)/2,1,h);
  }
 }
 
-/* ================= LOOP ================= */
+/* ========== MINI MAP ========== */
+function renderMap(){
+ mctx.clearRect(0,0,160,160);
+ let sx=160/MW, sy=160/MH;
+
+ for(let y=0;y<MH;y++){
+  for(let x=0;x<MW;x++){
+   if(mapData[y][x]==="#"){
+    mctx.fillStyle="#444";
+    mctx.fillRect(x*sx,y*sy,sx,sy);
+   }
+  }
+ }
+
+ // Exit
+ mctx.fillStyle="lime";
+ for(let y=0;y<MH;y++)for(let x=0;x<MW;x++)
+  if(mapData[y][x]==="E")
+   mctx.fillRect(x*sx,y*sy,sx,sy);
+
+ // Player
+ mctx.fillStyle="cyan";
+ mctx.fillRect(p.x*sx-3,p.y*sy-3,6,6);
+
+ // CPU
+ mctx.fillStyle="red";
+ mctx.fillRect(cpu.x*sx-3,cpu.y*sy-3,6,6);
+}
+
+/* ========== LOOP ========== */
 function loop(){
  update();
- render();
+ render3D();
+ renderMap();
  requestAnimationFrame(loop);
 }
 
-/* ================= MENU ================= */
+/* ========== MENU ========== */
 document.querySelector("button").onclick=()=>{
  document.getElementById("menu").style.display="none";
  c.requestPointerLock();
