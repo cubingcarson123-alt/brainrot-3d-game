@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>Maze Escape</title>
+<title>Maze Escape 3</title>
 <style>
 html,body{margin:0;overflow:hidden;background:#000}
 canvas{display:block}
@@ -43,39 +43,37 @@ canvas{display:block}
 <canvas id="c"></canvas>
 
 <script>
-/* ========== SETUP ========== */
+/* ===== SETUP ===== */
 const c=document.getElementById("c"),ctx=c.getContext("2d");
 const m=document.getElementById("map"),mctx=m.getContext("2d");
 resize();addEventListener("resize",resize);
 function resize(){c.width=innerWidth;c.height=innerHeight}
 
-/* ========== MAZE ========== */
+/* ===== EASY MAZE (BEATABLE) ===== */
 const mapData=[
-"############################",
-"#............#.............#",
-"#.######.#####.#.######.###.#",
-"#.#....#.....#.#.#....#...#.#",
-"#.#.##.#####.#.#.#.##.#####.#",
-"#.#.#....#.#.#.#.#.#....#.#.#",
-"#.#.######.#.#.#.#.######.#.#",
-"#...#........#...#........#.#",
-"###.#.###################.#.#",
-"#.................#........E#",
-"############################"
+"####################",
+"#.................E#",
+"#.####.######.######",
+"#.#....#......#....#",
+"#.#.####.#######.##.#",
+"#.#......#..........",
+"#.######.#.#########",
+"#........#..........",
+"####################"
 ];
 const MW=mapData[0].length, MH=mapData.length;
 
-/* ========== PLAYER ========== */
+/* ===== PLAYER ===== */
 let p={x:1.5,y:1.5,a:0};
 let W=false,locked=false;
 
-/* ========== CPU ========== */
-let cpu={x:14.5,y:6.5,a:Math.random()*6.28,s:0.01};
+/* ===== CPU ===== */
+let cpu={x:10.5,y:5.5,a:Math.random()*6.28,s:0.008};
 
-/* ========== STATE ========== */
+/* ===== STATE ===== */
 let danger=0,dead=false,won=false;
 
-/* ========== INPUT ========== */
+/* ===== INPUT ===== */
 onkeydown=e=>{if(e.key==="w")W=true}
 onkeyup=e=>{if(e.key==="w")W=false}
 
@@ -86,17 +84,17 @@ document.onmousemove=e=>{
  p.a-=e.movementX*0.00025;
 };
 
-/* ========== HELPERS ========== */
+/* ===== HELPERS ===== */
 function tile(x,y){return mapData[Math.floor(y)]?.[Math.floor(x)]}
 function wall(x,y){return tile(x,y)==="#"}
 
-/* ========== UPDATE ========== */
+/* ===== UPDATE ===== */
 function update(){
  if(dead||won)return;
 
  if(W){
-  let nx=p.x+Math.cos(p.a)*0.045;
-  let ny=p.y+Math.sin(p.a)*0.045;
+  let nx=p.x+Math.cos(p.a)*0.05;
+  let ny=p.y+Math.sin(p.a)*0.05;
   if(!wall(nx,p.y))p.x=nx;
   if(!wall(p.x,ny))p.y=ny;
  }
@@ -113,7 +111,7 @@ function update(){
  else{cpu.x=nx;cpu.y=ny;}
 
  let d=Math.hypot(p.x-cpu.x,p.y-cpu.y);
- danger=Math.min(100,100-d*8);
+ danger=Math.min(100,100-d*10);
  document.getElementById("fill").style.width=danger+"%";
 
  if(d<0.5){
@@ -123,7 +121,7 @@ function update(){
  }
 }
 
-/* ========== RENDER 3D ========== */
+/* ===== 3D RENDER ===== */
 function render3D(){
  ctx.fillStyle="#000";ctx.fillRect(0,0,c.width,c.height);
  const fov=Math.PI/3;
@@ -132,7 +130,7 @@ function render3D(){
   let ra=p.a-fov/2+i/c.width*fov;
   let dist=0,hitCPU=false,hitExit=false;
 
-  while(dist<30){
+  while(dist<25){
    dist+=0.03;
    let rx=p.x+Math.cos(ra)*dist;
    let ry=p.y+Math.sin(ra)*dist;
@@ -142,41 +140,35 @@ function render3D(){
   }
 
   let h=c.height/(dist*0.6);
-  ctx.fillStyle=hitCPU?"red":hitExit?"lime":`rgb(${200-dist*15},${200-dist*15},${200-dist*15})`;
+  ctx.fillStyle=hitCPU?"red":hitExit?"lime":`rgb(${180-dist*10},${180-dist*10},${180-dist*10})`;
   ctx.fillRect(i,(c.height-h)/2,1,h);
  }
 }
 
-/* ========== MINI MAP ========== */
+/* ===== MINI MAP ===== */
 function renderMap(){
  mctx.clearRect(0,0,160,160);
  let sx=160/MW, sy=160/MH;
 
- for(let y=0;y<MH;y++){
-  for(let x=0;x<MW;x++){
-   if(mapData[y][x]==="#"){
-    mctx.fillStyle="#444";
-    mctx.fillRect(x*sx,y*sy,sx,sy);
-   }
+ for(let y=0;y<MH;y++)for(let x=0;x<MW;x++)
+  if(mapData[y][x]==="#"){
+   mctx.fillStyle="#444";
+   mctx.fillRect(x*sx,y*sy,sx,sy);
   }
- }
 
- // Exit
  mctx.fillStyle="lime";
  for(let y=0;y<MH;y++)for(let x=0;x<MW;x++)
   if(mapData[y][x]==="E")
    mctx.fillRect(x*sx,y*sy,sx,sy);
 
- // Player
  mctx.fillStyle="cyan";
  mctx.fillRect(p.x*sx-3,p.y*sy-3,6,6);
 
- // CPU
  mctx.fillStyle="red";
  mctx.fillRect(cpu.x*sx-3,cpu.y*sy-3,6,6);
 }
 
-/* ========== LOOP ========== */
+/* ===== LOOP ===== */
 function loop(){
  update();
  render3D();
@@ -184,7 +176,7 @@ function loop(){
  requestAnimationFrame(loop);
 }
 
-/* ========== MENU ========== */
+/* ===== MENU ===== */
 document.querySelector("button").onclick=()=>{
  document.getElementById("menu").style.display="none";
  c.requestPointerLock();
