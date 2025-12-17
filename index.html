@@ -1,151 +1,157 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>3D Maze Fixed</title>
+<meta charset="UTF-8" />
+<title>Maze FPS</title>
 <style>
-  body { margin: 0; overflow: hidden; background: black; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background: #000;
+  }
+  canvas {
+    display: block;
+  }
   #hint {
     position: fixed;
     top: 10px;
-    width: 100%;
-    text-align: center;
+    left: 50%;
+    transform: translateX(-50%);
     color: white;
     font-family: monospace;
+    font-size: 14px;
     opacity: 0.8;
-    z-index: 10;
   }
 </style>
 </head>
 <body>
-<div id="hint">Click to lock mouse • Hold W to move</div>
-
-<script src="https://unpkg.com/three@0.158.0/build/three.min.js"></script>
+<div id="hint">Click to lock mouse · Hold W to move</div>
+<canvas id="c"></canvas>
 
 <script>
-/* ===== SCENE ===== */
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x000000);
+const canvas = document.getElementById("c");
+const ctx = canvas.getContext("2d");
+resize();
+window.addEventListener("resize", resize);
 
-const camera = new THREE.PerspectiveCamera(
-  75, innerWidth / innerHeight, 0.1, 1000
-);
+function resize() {
+  canvas.width = innerWidth;
+  canvas.height = innerHeight;
+}
 
-const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setSize(innerWidth, innerHeight);
-document.body.appendChild(renderer.domElement);
-
-/* ===== LIGHT ===== */
-scene.add(new THREE.AmbientLight(0xffffff, 0.4));
-const light = new THREE.PointLight(0xffffff, 0.8);
-light.position.set(0, 20, 0);
-scene.add(light);
-
-/* ===== PLAYER ===== */
+/* ======================
+   PLAYER
+====================== */
 const player = {
-  speed: 0.12,
-  yaw: 0,
-  pitch: 0
+  x: 3.5,
+  y: 3.5,
+  angle: 0,
+  speed: 0.05
 };
 
-/* SPAWN POINT (SAFE, CENTER OF PATH) */
-camera.position.set(2, 1.6, 2);
+let keys = { w: false };
+let mouseLocked = false;
 
-/* ===== POINTER LOCK ===== */
-renderer.domElement.addEventListener("click", () => {
-  renderer.domElement.requestPointerLock();
+/* ======================
+   MAZE (BIG + WIDE)
+====================== */
+const maze = [
+  "############",
+  "#..........#",
+  "#..####....#",
+  "#..........#",
+  "#....####..#",
+  "#..........#",
+  "#..####....#",
+  "#..........#",
+  "############"
+];
+
+const TILE = 1;
+
+/* ======================
+   INPUT
+====================== */
+document.addEventListener("keydown", e => {
+  if (e.key.toLowerCase() === "w") keys.w = true;
+});
+document.addEventListener("keyup", e => {
+  if (e.key.toLowerCase() === "w") keys.w = false;
+});
+
+canvas.addEventListener("click", () => {
+  canvas.requestPointerLock();
+});
+
+document.addEventListener("pointerlockchange", () => {
+  mouseLocked = document.pointerLockElement === canvas;
 });
 
 document.addEventListener("mousemove", e => {
-  if (document.pointerLockElement !== renderer.domElement) return;
-
-  player.yaw -= e.movementX * 0.002;
-  player.pitch -= e.movementY * 0.002;
-  player.pitch = Math.max(-1.5, Math.min(1.5, player.pitch));
-
-  camera.rotation.set(player.pitch, player.yaw, 0);
+  if (!mouseLocked) return;
+  player.angle -= e.movementX * 0.0008; // SLOW left/right
 });
 
-/* ===== INPUT ===== */
-let forward = false;
-document.addEventListener("keydown", e => {
-  if (e.code === "KeyW") forward = true;
-});
-document.addEventListener("keyup", e => {
-  if (e.code === "KeyW") forward = false;
-});
+/* ======================
+   COLLISION
+====================== */
+function isWall(x, y) {
+  const mx = Math.floor(x);
+  const my = Math.floor(y);
+  return maze[my]?.[mx] === "#";
+}
 
-/* ===== MAZE ===== */
-const maze = [
-  "1111111111",
-  "1000000001",
-  "1011111101",
-  "1010000101",
-  "1010110101",
-  "1000000001",
-  "1111111111"
-];
+/* ======================
+   UPDATE
+====================== */
+function update() {
+  if (keys.w) {
+    const nx = player.x + Math.cos(player.angle) * player.speed;
+    const ny = player.y + Math.sin(player.angle) * player.speed;
 
-const WALL = 2;
-const wallGeo = new THREE.BoxGeometry(WALL, 2, WALL);
-const wallMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
+    if (!isWall(nx, player.y)) player.x = nx;
+    if (!isWall(player.x, ny)) player.y = ny;
+  }
+}
 
-const walls = [];
+/* ======================
+   RENDER (RAYCAST)
+====================== */
+function render() {
+  ctx.fillStyle = "#000";
+  ctx.fillRect(0,0,canvas.width,canvas.height);
 
-for (let z = 0; z < maze.length; z++) {
-  for (let x = 0; x < maze[z].length; x++) {
-    if (maze[z][x] === "1") {
-      const w = new THREE.Mesh(wallGeo, wallMat);
-      w.position.set(x * WALL, 1, z * WALL);
-      scene.add(w);
-      walls.push(w);
+  const FOV = Math.PI / 3;
+  const rays = canvas.width;
+  for (let i = 0; i < rays; i++) {
+    const rayAngle = player.angle - FOV/2 + (i/rays)*FOV;
+    let dist = 0;
+    let hit = false;
+
+    while (!hit && dist < 20) {
+      dist += 0.02;
+      const rx = player.x + Math.cos(rayAngle) * dist;
+      const ry = player.y + Math.sin(rayAngle) * dist;
+      if (isWall(rx, ry)) hit = true;
     }
+
+    const wallHeight = Math.min(canvas.height, canvas.height / (dist * 0.6));
+    const shade = Math.max(30, 200 - dist * 30);
+    ctx.fillStyle = `rgb(${shade},${shade},${shade})`;
+    ctx.fillRect(i, (canvas.height-wallHeight)/2, 1, wallHeight);
   }
 }
 
-/* ===== FLOOR ===== */
-const floor = new THREE.Mesh(
-  new THREE.PlaneGeometry(100, 100),
-  new THREE.MeshStandardMaterial({ color: 0x111111 })
-);
-floor.rotation.x = -Math.PI / 2;
-scene.add(floor);
-
-/* ===== COLLISION ===== */
-function collides(pos) {
-  for (const w of walls) {
-    if (
-      Math.abs(pos.x - w.position.x) < 1 &&
-      Math.abs(pos.z - w.position.z) < 1
-    ) return true;
-  }
-  return false;
+/* ======================
+   LOOP
+====================== */
+function loop() {
+  update();
+  render();
+  requestAnimationFrame(loop);
 }
-
-/* ===== LOOP ===== */
-function animate() {
-  requestAnimationFrame(animate);
-
-  if (forward) {
-    const dir = new THREE.Vector3();
-    camera.getWorldDirection(dir);
-    dir.y = 0;
-    dir.normalize();
-
-    const next = camera.position.clone().add(dir.multiplyScalar(player.speed));
-    if (!collides(next)) camera.position.copy(next);
-  }
-
-  renderer.render(scene, camera);
-}
-animate();
-
-/* ===== RESIZE ===== */
-window.addEventListener("resize", () => {
-  camera.aspect = innerWidth / innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(innerWidth, innerHeight);
-});
+loop();
 </script>
 </body>
 </html>
