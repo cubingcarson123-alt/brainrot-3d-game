@@ -18,16 +18,14 @@ canvas{display:block}
 #meter{
  position:fixed;bottom:20px;left:50%;
  transform:translateX(-50%);
- width:320px;height:14px;border:2px solid #fff;
- z-index:5
+ width:320px;height:14px;border:2px solid #fff
 }
 #fill{height:100%;width:0;background:red}
 
 #map{
  position:fixed;top:15px;right:15px;
  width:160px;height:160px;
- background:#111;border:2px solid #fff;
- z-index:6
+ background:#111;border:2px solid #fff
 }
 
 #win,#scare{display:none;font-size:60px}
@@ -36,21 +34,20 @@ canvas{display:block}
 <body>
 
 <div id="menu"><button>START</button></div>
-<div id="win">YOU ESCAPED 🎉</div>
+<div id="win">YOU ESCAPED</div>
 <div id="scare">👹</div>
 <div id="meter"><div id="fill"></div></div>
 <canvas id="map"></canvas>
 <canvas id="c"></canvas>
 
 <script>
-/* ===== SETUP ===== */
 const c=document.getElementById("c"),ctx=c.getContext("2d");
 const m=document.getElementById("map"),mctx=m.getContext("2d");
 resize();addEventListener("resize",resize);
 function resize(){c.width=innerWidth;c.height=innerHeight}
 
 /* ===== MAZE ===== */
-const mapData=[
+const maze=[
 "####################",
 "#.................E#",
 "#.####.######.######",
@@ -61,22 +58,33 @@ const mapData=[
 "#........#..........",
 "####################"
 ];
-const MW=mapData[0].length, MH=mapData.length;
+const MW=maze[0].length, MH=maze.length;
 
-/* ===== PLAYER (FIXED SPAWN) ===== */
-let p={x:1.5,y:7.5,a:0}; // FAR FROM EXIT
-let W=false,locked=false;
+/* ===== HELPERS ===== */
+function tile(x,y){return maze[Math.floor(y)]?.[Math.floor(x)]}
+function wall(x,y){return tile(x,y)==="#"}
 
-/* ===== CPU (FIXED SPAWN + ROAM) ===== */
-let cpu={
- x:9.5,
- y:5.5, // OPEN AREA
- a:Math.random()*6.28,
- s:0.01
-};
+/* ===== SAFE SPAWN ===== */
+function randomFloor(){
+ while(true){
+  let x=Math.random()*(MW-2)+1;
+  let y=Math.random()*(MH-2)+1;
+  if(!wall(x,y)) return {x,y};
+ }
+}
+
+/* ===== PLAYER ===== */
+let p=randomFloor();
+p.a=0;
+let W=false;
+
+/* ===== CPU ===== */
+let cpu=randomFloor();
+cpu.a=Math.random()*6.28;
+cpu.s=0.01;
 
 /* ===== STATE ===== */
-let danger=0,dead=false,won=false;
+let locked=false,danger=0,dead=false,won=false;
 
 /* ===== INPUT ===== */
 onkeydown=e=>{if(e.key==="w")W=true}
@@ -86,18 +94,13 @@ c.onclick=()=>c.requestPointerLock();
 document.onpointerlockchange=()=>locked=document.pointerLockElement===c;
 document.onmousemove=e=>{
  if(!locked)return;
- p.a-=e.movementX*0.00025;
+ p.a-=e.movementX*0.00025; // LEFT/RIGHT ONLY
 };
-
-/* ===== HELPERS ===== */
-function tile(x,y){return mapData[Math.floor(y)]?.[Math.floor(x)]}
-function wall(x,y){return tile(x,y)==="#"}
 
 /* ===== UPDATE ===== */
 function update(){
  if(dead||won)return;
 
- // Player movement
  if(W){
   let nx=p.x+Math.cos(p.a)*0.05;
   let ny=p.y+Math.sin(p.a)*0.05;
@@ -105,37 +108,33 @@ function update(){
   if(!wall(p.x,ny))p.y=ny;
  }
 
- // Win
  if(tile(p.x,p.y)==="E"){
   won=true;
   document.exitPointerLock();
-  document.getElementById("win").style.display="flex";
+  win.style.display="flex";
  }
 
- // CPU roam (won't trap)
+ // CPU roam (wall-safe)
  let nx=cpu.x+Math.cos(cpu.a)*cpu.s;
  let ny=cpu.y+Math.sin(cpu.a)*cpu.s;
-
  if(wall(nx,ny)){
-  cpu.a+=Math.PI/2 + Math.random(); // TURN AWAY
+  cpu.a+=Math.PI/2+Math.random();
  }else{
-  cpu.x=nx;
-  cpu.y=ny;
+  cpu.x=nx; cpu.y=ny;
  }
 
- // Danger meter
  let d=Math.hypot(p.x-cpu.x,p.y-cpu.y);
  danger=Math.min(100,100-d*10);
- document.getElementById("fill").style.width=danger+"%";
+ fill.style.width=danger+"%";
 
  if(d<0.5){
   dead=true;
   document.exitPointerLock();
-  document.getElementById("scare").style.display="flex";
+  scare.style.display="flex";
  }
 }
 
-/* ===== 3D RENDER ===== */
+/* ===== 3D ===== */
 function render3D(){
  ctx.fillStyle="#000";
  ctx.fillRect(0,0,c.width,c.height);
@@ -150,31 +149,31 @@ function render3D(){
    let rx=p.x+Math.cos(ra)*dist;
    let ry=p.y+Math.sin(ra)*dist;
 
-   if(Math.hypot(rx-cpu.x,ry-cpu.y)<0.7){hitCPU=true;break;}
+   if(Math.hypot(rx-cpu.x,ry-cpu.y)<0.6){hitCPU=true;break;}
    if(tile(rx,ry)==="E"){hitExit=true;break;}
    if(wall(rx,ry))break;
   }
 
   let h=c.height/(dist*0.6);
-  ctx.fillStyle=hitCPU?"red":hitExit?"lime":`rgb(${180-dist*10},${180-dist*10},${180-dist*10})`;
+  ctx.fillStyle=hitCPU?"red":hitExit?"lime":`rgb(${170-dist*8},${170-dist*8},${170-dist*8})`;
   ctx.fillRect(i,(c.height-h)/2,1,h);
  }
 }
 
-/* ===== MINI MAP ===== */
+/* ===== MAP ===== */
 function renderMap(){
  mctx.clearRect(0,0,160,160);
- let sx=160/MW, sy=160/MH;
+ let sx=160/MW,sy=160/MH;
 
  for(let y=0;y<MH;y++)for(let x=0;x<MW;x++)
-  if(mapData[y][x]==="#"){
+  if(maze[y][x]==="#"){
    mctx.fillStyle="#444";
    mctx.fillRect(x*sx,y*sy,sx,sy);
   }
 
  mctx.fillStyle="lime";
  for(let y=0;y<MH;y++)for(let x=0;x<MW;x++)
-  if(mapData[y][x]==="E")
+  if(maze[y][x]==="E")
    mctx.fillRect(x*sx,y*sy,sx,sy);
 
  mctx.fillStyle="cyan";
@@ -192,9 +191,9 @@ function loop(){
  requestAnimationFrame(loop);
 }
 
-/* ===== MENU ===== */
-document.querySelector("button").onclick=()=>{
- document.getElementById("menu").style.display="none";
+/* ===== START ===== */
+menu.querySelector("button").onclick=()=>{
+ menu.style.display="none";
  c.requestPointerLock();
  loop();
 };
