@@ -15,7 +15,7 @@ canvas{display:block}
 }
 
 #menu button{
- font-size:26px;padding:12px 32px;cursor:pointer
+ font-size:28px;padding:14px 36px;cursor:pointer
 }
 
 #meter{
@@ -39,41 +39,41 @@ canvas{display:block}
 <canvas id="c"></canvas>
 
 <script>
-/* ===================== */
-const c=document.getElementById("c"),x=c.getContext("2d");
+/* ================= SETUP ================= */
+const c=document.getElementById("c"),ctx=c.getContext("2d");
 resize();addEventListener("resize",resize);
 function resize(){c.width=innerWidth;c.height=innerHeight}
 
-/* ===== BIGGER MAZE ===== */
+/* ================= MAZE ================= */
 const map=[
-"#########################",
-"#...............#.......#",
-"#.#####.#######.#.#####.#",
-"#.#.....#.....#.#.....#.#",
-"#.#.#####.###.#.#.###.#.#",
-"#.#.#.....#.#.#.#.#...#.#",
-"#.#.#.#####.#.#.#.#.###.#",
-"#...#.........#...#.....#",
-"###.###########.########.#",
-"#.............#........E#",
-"#########################"
+"############################",
+"#............#.............#",
+"#.######.#####.#.######.###.#",
+"#.#....#.....#.#.#....#...#.#",
+"#.#.##.#####.#.#.#.##.#####.#",
+"#.#.#....#.#.#.#.#.#....#.#.#",
+"#.#.######.#.#.#.#.######.#.#",
+"#...#........#...#........#.#",
+"###.#.###################.#.#",
+"#.................#........E#",
+"############################"
 ];
 
-/* ===== PLAYER ===== */
+/* ================= PLAYER ================= */
 let p={x:1.5,y:1.5,a:0};
 let W=false,locked=false;
 
-/* ===== CPU ===== */
+/* ================= CPU (VISIBLE) ================= */
 let cpu={
- x:10.5,y:6.5,
+ x:14.5,y:6.5,
  a:Math.random()*Math.PI*2,
- s:0.006
+ s:0.01
 };
 
-/* ===== STATE ===== */
+/* ================= STATE ================= */
 let danger=0,dead=false,won=false;
 
-/* ===== INPUT ===== */
+/* ================= INPUT ================= */
 onkeydown=e=>{if(e.key==="w")W=true}
 onkeyup=e=>{if(e.key==="w")W=false}
 
@@ -81,37 +81,35 @@ c.onclick=()=>c.requestPointerLock();
 document.onpointerlockchange=()=>locked=document.pointerLockElement===c;
 document.onmousemove=e=>{
  if(!locked)return;
- p.a-=e.movementX*0.00035;
+ p.a-=e.movementX*0.00025; // FIXED SENSITIVITY
 };
 
-/* ===== MAP HELPERS ===== */
+/* ================= HELPERS ================= */
 function tile(x,y){
  return map[Math.floor(y)]?.[Math.floor(x)];
 }
-function wall(x,y){
- return tile(x,y)==="#";
-}
+function wall(x,y){return tile(x,y)==="#"}
 
-/* ===== UPDATE ===== */
+/* ================= UPDATE ================= */
 function update(){
  if(dead||won)return;
 
  // Player move
  if(W){
-  let nx=p.x+Math.cos(p.a)*0.05;
-  let ny=p.y+Math.sin(p.a)*0.05;
+  let nx=p.x+Math.cos(p.a)*0.045;
+  let ny=p.y+Math.sin(p.a)*0.045;
   if(!wall(nx,p.y))p.x=nx;
   if(!wall(p.x,ny))p.y=ny;
  }
 
- // Win condition
+ // Exit
  if(tile(p.x,p.y)==="E"){
   won=true;
   document.exitPointerLock();
   document.getElementById("win").style.display="flex";
  }
 
- // CPU roaming
+ // CPU roaming (always visible)
  let nx=cpu.x+Math.cos(cpu.a)*cpu.s;
  let ny=cpu.y+Math.sin(cpu.a)*cpu.s;
  if(wall(nx,ny)){
@@ -122,20 +120,20 @@ function update(){
 
  // Danger meter
  let d=Math.hypot(p.x-cpu.x,p.y-cpu.y);
- danger=Math.min(100,danger+(1/d)*0.4);
+ danger=Math.min(100,100-d*8);
  document.getElementById("fill").style.width=danger+"%";
 
- if(d<0.6){
+ if(d<0.5){
   dead=true;
   document.exitPointerLock();
   document.getElementById("scare").style.display="flex";
  }
 }
 
-/* ===== RENDER ===== */
+/* ================= RENDER ================= */
 function render(){
- x.fillStyle="#000";
- x.fillRect(0,0,c.width,c.height);
+ ctx.fillStyle="#000";
+ ctx.fillRect(0,0,c.width,c.height);
 
  const fov=Math.PI/3;
 
@@ -144,40 +142,36 @@ function render(){
   let dist=0,hitCPU=false,hitExit=false;
 
   while(dist<30){
-   dist+=0.03;
+   dist+=0.025;
    let rx=p.x+Math.cos(ra)*dist;
    let ry=p.y+Math.sin(ra)*dist;
 
-   if(Math.hypot(rx-cpu.x,ry-cpu.y)<0.4){
-    hitCPU=true;break;
-   }
-   if(tile(rx,ry)==="E"){
-    hitExit=true;break;
-   }
+   if(Math.hypot(rx-cpu.x,ry-cpu.y)<0.7){hitCPU=true;break;}
+   if(tile(rx,ry)==="E"){hitExit=true;break;}
    if(wall(rx,ry))break;
   }
 
   let h=c.height/(dist*0.6);
 
-  if(hitCPU) x.fillStyle="red";
-  else if(hitExit) x.fillStyle="lime";
+  if(hitCPU) ctx.fillStyle="red";       // CPU CLEAR
+  else if(hitExit) ctx.fillStyle="lime";// EXIT CLEAR
   else{
-   let s=180-dist*15;
-   x.fillStyle=`rgb(${s},${s},${s})`;
+   let s=200-dist*15;
+   ctx.fillStyle=`rgb(${s},${s},${s})`;
   }
 
-  x.fillRect(i,(c.height-h)/2,1,h);
+  ctx.fillRect(i,(c.height-h)/2,1,h);
  }
 }
 
-/* ===== LOOP ===== */
+/* ================= LOOP ================= */
 function loop(){
  update();
  render();
  requestAnimationFrame(loop);
 }
 
-/* ===== MENU ===== */
+/* ================= MENU ================= */
 document.querySelector("button").onclick=()=>{
  document.getElementById("menu").style.display="none";
  c.requestPointerLock();
