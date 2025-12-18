@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>Maze Escape FIXED</title>
+<title>Maze Sahur</title>
 <style>
 html,body{margin:0;overflow:hidden;background:#000}
 canvas{display:block}
@@ -14,9 +14,9 @@ canvas{display:block}
 }
 #menu button{font-size:26px;padding:12px 30px}
 #meter{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);
- width:320px;height:14px;border:2px solid #fff}
+ width:340px;height:14px;border:2px solid #fff}
 #fill{height:100%;width:0;background:red}
-#map{position:fixed;top:15px;right:15px;width:160px;height:160px;
+#map{position:fixed;top:15px;right:15px;width:180px;height:180px;
  background:#111;border:2px solid #fff}
 #win,#scare{display:none;font-size:60px}
 </style>
@@ -25,7 +25,7 @@ canvas{display:block}
 
 <div id="menu"><button>START</button></div>
 <div id="win">YOU ESCAPED</div>
-<div id="scare">👹</div>
+<div id="scare">TUNG TUNG TUNG SAHUR</div>
 <div id="meter"><div id="fill"></div></div>
 <canvas id="map"></canvas>
 <canvas id="c"></canvas>
@@ -36,26 +36,27 @@ const m=document.getElementById("map"),mctx=m.getContext("2d");
 resize();onresize=resize;
 function resize(){c.width=innerWidth;c.height=innerHeight}
 
-/* ===== CONNECTED MAZE (SAFE) ===== */
+/* ===== BIG CONNECTED MAZE ===== */
 const maze=[
-"####################",
-"#..................#",
-"#.####.######.####.#",
-"#.#....#......#...#",
-"#.#.####.#######.#.#",
-"#.#......#.........",
-"#.######.#.########",
-"#........#.........",
-"#.########.#######.#",
-"#................E#",
-"####################"
+"############################",
+"#............#.............#",
+"#.######.#####.#.#########.#",
+"#.#......#.....#.....#....#",
+"#.#.######.#########.#.####E",
+"#.#......#...........#.....#",
+"#.######.#.#########.#####.#",
+"#........#.....#...........#",
+"#.###########.#.#.#########.#",
+"#.............#.#...........#",
+"#.#############.#.#########.#",
+"#...............#...........#",
+"############################"
 ];
 const MW=maze[0].length, MH=maze.length;
-
 function tile(x,y){return maze[Math.floor(y)]?.[Math.floor(x)]}
 function wall(x,y){return tile(x,y)==="#"}
 
-/* ===== SAFE FLOOR PICK ===== */
+/* ===== RANDOM FLOOR ===== */
 function randomFloor(){
  let spots=[];
  for(let y=1;y<MH-1;y++)
@@ -65,13 +66,13 @@ function randomFloor(){
 }
 
 /* ===== PLAYER ===== */
-let p=randomFloor();
-p.a=0;
+let p=randomFloor(); p.a=0;
 
-/* ===== CPU ===== */
+/* ===== CPU (SAHUR) ===== */
 let cpu=randomFloor();
 cpu.a=Math.random()*6.28;
-cpu.s=0.01;
+cpu.speed=0.012;
+cpu.chasing=false;
 
 /* ===== INPUT ===== */
 let W=false,locked=false;
@@ -80,8 +81,22 @@ onkeyup=e=>{if(e.key==="w")W=false}
 c.onclick=()=>c.requestPointerLock();
 document.onpointerlockchange=()=>locked=document.pointerLockElement===c;
 document.onmousemove=e=>{
- if(locked)p.a-=e.movementX*0.00025;
+ if(locked)p.a-=e.movementX*0.0002;
 };
+
+/* ===== LINE OF SIGHT ===== */
+function seesPlayer(){
+ let dx=p.x-cpu.x, dy=p.y-cpu.y;
+ let dist=Math.hypot(dx,dy);
+ if(dist>8) return false;
+ let steps=dist/0.1;
+ for(let i=0;i<steps;i++){
+  let x=cpu.x+dx*i/steps;
+  let y=cpu.y+dy*i/steps;
+  if(wall(x,y)) return false;
+ }
+ return true;
+}
 
 /* ===== STATE ===== */
 let danger=0,dead=false,won=false;
@@ -90,6 +105,7 @@ let danger=0,dead=false,won=false;
 function update(){
  if(dead||won)return;
 
+ // PLAYER
  if(W){
   let nx=p.x+Math.cos(p.a)*0.05;
   let ny=p.y+Math.sin(p.a)*0.05;
@@ -102,14 +118,23 @@ function update(){
   win.style.display="flex";
  }
 
- // CPU roaming (wall-safe)
- let nx=cpu.x+Math.cos(cpu.a)*cpu.s;
- let ny=cpu.y+Math.sin(cpu.a)*cpu.s;
- if(wall(nx,ny))cpu.a+=Math.PI/2+Math.random();
- else{cpu.x=nx;cpu.y=ny;}
+ // CPU LOGIC
+ if(seesPlayer()){
+  cpu.chasing=true;
+  cpu.a=Math.atan2(p.y-cpu.y,p.x-cpu.x);
+ } else if(Math.random()<0.01){
+  cpu.chasing=false;
+  cpu.a+=Math.random()*2-1;
+ }
+
+ let s=cpu.chasing?0.025:cpu.speed;
+ let nx=cpu.x+Math.cos(cpu.a)*s;
+ let ny=cpu.y+Math.sin(cpu.a)*s;
+ if(!wall(nx,ny)){cpu.x=nx;cpu.y=ny;}
+ else cpu.a+=Math.PI/2;
 
  let d=Math.hypot(p.x-cpu.x,p.y-cpu.y);
- danger=Math.min(100,100-d*10);
+ danger=Math.min(100,100-d*12);
  fill.style.width=danger+"%";
 
  if(d<0.5){
@@ -118,14 +143,14 @@ function update(){
  }
 }
 
-/* ===== RENDER ===== */
+/* ===== 3D RENDER ===== */
 function render3D(){
  ctx.fillStyle="#000";ctx.fillRect(0,0,c.width,c.height);
  const fov=Math.PI/3;
  for(let i=0;i<c.width;i++){
   let ra=p.a-fov/2+i/c.width*fov;
   let dist=0,hitCPU=false,hitExit=false;
-  while(dist<25){
+  while(dist<30){
    dist+=0.03;
    let rx=p.x+Math.cos(ra)*dist;
    let ry=p.y+Math.sin(ra)*dist;
@@ -134,16 +159,23 @@ function render3D(){
    if(wall(rx,ry))break;
   }
   let h=c.height/(dist*0.6);
-  ctx.fillStyle=hitCPU?"red":hitExit?"lime":
-   `rgb(${170-dist*8},${170-dist*8},${170-dist*8})`;
+  ctx.fillStyle=hitCPU?"#ff3333":hitExit?"lime":
+   `rgb(${180-dist*6},${180-dist*6},${180-dist*6})`;
   ctx.fillRect(i,(c.height-h)/2,1,h);
+
+  // SAHUR EYES
+  if(hitCPU){
+   ctx.fillStyle="#fff";
+   ctx.fillRect(i,(c.height-h)/2+20,1,8);
+   ctx.fillRect(i,(c.height-h)/2+40,1,8);
+  }
  }
 }
 
 /* ===== MAP ===== */
 function renderMap(){
- mctx.clearRect(0,0,160,160);
- let sx=160/MW,sy=160/MH;
+ mctx.clearRect(0,0,180,180);
+ let sx=180/MW,sy=180/MH;
  for(let y=0;y<MH;y++)for(let x=0;x<MW;x++)
   if(maze[y][x]==="#"){
    mctx.fillStyle="#444";
