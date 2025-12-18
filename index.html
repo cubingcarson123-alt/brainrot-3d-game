@@ -1,206 +1,192 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-<meta charset="utf-8">
-<title>Maze Sahur</title>
+<meta charset="UTF-8">
+<title>Maze Horror</title>
 <style>
-html,body{margin:0;overflow:hidden;background:#000}
+html,body{margin:0;overflow:hidden;background:black;font-family:monospace}
 canvas{display:block}
-#menu,#win,#scare{
- position:fixed;inset:0;
- display:flex;align-items:center;justify-content:center;
- background:#000;color:#fff;font-family:sans-serif;
- z-index:10
+#map{
+  position:fixed;
+  right:10px;
+  bottom:10px;
+  width:260px;
+  height:260px;
+  border:2px solid white;
+  background:#111;
 }
-#menu button{font-size:26px;padding:12px 30px}
-#meter{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);
- width:340px;height:14px;border:2px solid #fff}
-#fill{height:100%;width:0;background:red}
-#map{position:fixed;top:15px;right:15px;width:180px;height:180px;
- background:#111;border:2px solid #fff}
-#win,#scare{display:none;font-size:60px}
+#hint{
+  position:fixed;
+  top:10px;
+  left:50%;
+  transform:translateX(-50%);
+  color:white;
+}
 </style>
 </head>
 <body>
 
-<div id="menu"><button>START</button></div>
-<div id="win">YOU ESCAPED</div>
-<div id="scare">TUNG TUNG TUNG SAHUR</div>
-<div id="meter"><div id="fill"></div></div>
+<div id="hint">Click → Mouse Lock • W to move</div>
+<canvas id="game"></canvas>
 <canvas id="map"></canvas>
-<canvas id="c"></canvas>
 
 <script>
-const c=document.getElementById("c"),ctx=c.getContext("2d");
-const m=document.getElementById("map"),mctx=m.getContext("2d");
-resize();onresize=resize;
-function resize(){c.width=innerWidth;c.height=innerHeight}
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+const map = document.getElementById("map");
+const mctx = map.getContext("2d");
 
-/* ===== BIG CONNECTED MAZE ===== */
-const maze=[
-"############################",
-"#............#.............#",
-"#.######.#####.#.#########.#",
-"#.#......#.....#.....#....#",
-"#.#.######.#########.#.####E",
-"#.#......#...........#.....#",
-"#.######.#.#########.#####.#",
-"#........#.....#...........#",
-"#.###########.#.#.#########.#",
-"#.............#.#...........#",
-"#.#############.#.#########.#",
-"#...............#...........#",
-"############################"
+canvas.width = innerWidth;
+canvas.height = innerHeight;
+onresize = () => { canvas.width=innerWidth; canvas.height=innerHeight; };
+
+const TILE = 120;
+
+/* BIG MAZE */
+const MAZE = [
+"########################",
+"#.............#........#",
+"#.######.#####.#.####..#",
+"#.#....#.....#.#.#..#..#",
+"#.#.##.######.#.#.#.##.#",
+"#.#.#........#...#....#",
+"#.#.#.###########.######",
+"#...#.................E#",
+"###.####################",
+"#......................#",
+"########################"
 ];
-const MW=maze[0].length, MH=maze.length;
-function tile(x,y){return maze[Math.floor(y)]?.[Math.floor(x)]}
-function wall(x,y){return tile(x,y)==="#"}
 
-/* ===== RANDOM FLOOR ===== */
-function randomFloor(){
- let spots=[];
- for(let y=1;y<MH-1;y++)
-  for(let x=1;x<MW-1;x++)
-   if(maze[y][x]===".")spots.push({x:x+0.5,y:y+0.5});
- return spots[Math.floor(Math.random()*spots.length)];
-}
+function isWall(x,y){ return MAZE[y]?.[x]==="#"; }
 
-/* ===== PLAYER ===== */
-let p=randomFloor(); p.a=0;
-
-/* ===== CPU (SAHUR) ===== */
-let cpu=randomFloor();
-cpu.a=Math.random()*6.28;
-cpu.speed=0.012;
-cpu.chasing=false;
-
-/* ===== INPUT ===== */
-let W=false,locked=false;
-onkeydown=e=>{if(e.key==="w")W=true}
-onkeyup=e=>{if(e.key==="w")W=false}
-c.onclick=()=>c.requestPointerLock();
-document.onpointerlockchange=()=>locked=document.pointerLockElement===c;
-document.onmousemove=e=>{
- if(locked)p.a-=e.movementX*0.0002;
+/* PLAYER */
+const player={
+  x:TILE*1.5,
+  y:TILE*1.5,
+  a:0,
+  speed:3
 };
 
-/* ===== LINE OF SIGHT ===== */
-function seesPlayer(){
- let dx=p.x-cpu.x, dy=p.y-cpu.y;
- let dist=Math.hypot(dx,dy);
- if(dist>8) return false;
- let steps=dist/0.1;
- for(let i=0;i<steps;i++){
-  let x=cpu.x+dx*i/steps;
-  let y=cpu.y+dy*i/steps;
-  if(wall(x,y)) return false;
- }
- return true;
+let forward=false;
+
+/* CPU (TUNG TUNG SAHUR) */
+const tung={
+  x:TILE*14.5,
+  y:TILE*6.5,
+  dir:Math.random()*Math.PI*2,
+  speed:1.1
+};
+
+/* INPUT */
+onclick=()=>canvas.requestPointerLock();
+onkeydown=e=>{ if(e.key==="w") forward=true; };
+onkeyup=e=>{ if(e.key==="w") forward=false; };
+
+onmousemove=e=>{
+  if(document.pointerLockElement){
+    player.a+=e.movementX*0.0015;
+  }
+};
+
+/* COLLISION */
+function canMove(x,y){
+  return !isWall(Math.floor(x/TILE),Math.floor(y/TILE));
 }
 
-/* ===== STATE ===== */
-let danger=0,dead=false,won=false;
-
-/* ===== UPDATE ===== */
+/* UPDATE */
 function update(){
- if(dead||won)return;
+  if(forward){
+    let nx=player.x+Math.cos(player.a)*player.speed;
+    let ny=player.y+Math.sin(player.a)*player.speed;
+    if(canMove(nx,ny)){ player.x=nx; player.y=ny; }
+  }
 
- // PLAYER
- if(W){
-  let nx=p.x+Math.cos(p.a)*0.05;
-  let ny=p.y+Math.sin(p.a)*0.05;
-  if(!wall(nx,p.y))p.x=nx;
-  if(!wall(p.x,ny))p.y=ny;
- }
-
- if(tile(p.x,p.y)==="E"){
-  won=true;document.exitPointerLock();
-  win.style.display="flex";
- }
-
- // CPU LOGIC
- if(seesPlayer()){
-  cpu.chasing=true;
-  cpu.a=Math.atan2(p.y-cpu.y,p.x-cpu.x);
- } else if(Math.random()<0.01){
-  cpu.chasing=false;
-  cpu.a+=Math.random()*2-1;
- }
-
- let s=cpu.chasing?0.025:cpu.speed;
- let nx=cpu.x+Math.cos(cpu.a)*s;
- let ny=cpu.y+Math.sin(cpu.a)*s;
- if(!wall(nx,ny)){cpu.x=nx;cpu.y=ny;}
- else cpu.a+=Math.PI/2;
-
- let d=Math.hypot(p.x-cpu.x,p.y-cpu.y);
- danger=Math.min(100,100-d*12);
- fill.style.width=danger+"%";
-
- if(d<0.5){
-  dead=true;document.exitPointerLock();
-  scare.style.display="flex";
- }
+  let cx=tung.x+Math.cos(tung.dir)*tung.speed;
+  let cy=tung.y+Math.sin(tung.dir)*tung.speed;
+  if(canMove(cx,cy)){ tung.x=cx; tung.y=cy; }
+  else tung.dir=Math.random()*Math.PI*2;
 }
 
-/* ===== 3D RENDER ===== */
-function render3D(){
- ctx.fillStyle="#000";ctx.fillRect(0,0,c.width,c.height);
- const fov=Math.PI/3;
- for(let i=0;i<c.width;i++){
-  let ra=p.a-fov/2+i/c.width*fov;
-  let dist=0,hitCPU=false,hitExit=false;
-  while(dist<30){
-   dist+=0.03;
-   let rx=p.x+Math.cos(ra)*dist;
-   let ry=p.y+Math.sin(ra)*dist;
-   if(Math.hypot(rx-cpu.x,ry-cpu.y)<0.6){hitCPU=true;break;}
-   if(tile(rx,ry)==="E"){hitExit=true;break;}
-   if(wall(rx,ry))break;
+/* DRAW WORLD */
+function drawMaze(){
+  for(let y=0;y<MAZE.length;y++){
+    for(let x=0;x<MAZE[y].length;x++){
+      if(MAZE[y][x]==="#"){
+        ctx.fillStyle="#333";
+        ctx.fillRect(
+          x*TILE-player.x+canvas.width/2,
+          y*TILE-player.y+canvas.height/2,
+          TILE,TILE
+        );
+      }
+    }
   }
-  let h=c.height/(dist*0.6);
-  ctx.fillStyle=hitCPU?"#ff3333":hitExit?"lime":
-   `rgb(${180-dist*6},${180-dist*6},${180-dist*6})`;
-  ctx.fillRect(i,(c.height-h)/2,1,h);
-
-  // SAHUR EYES
-  if(hitCPU){
-   ctx.fillStyle="#fff";
-   ctx.fillRect(i,(c.height-h)/2+20,1,8);
-   ctx.fillRect(i,(c.height-h)/2+40,1,8);
-  }
- }
 }
 
-/* ===== MAP ===== */
-function renderMap(){
- mctx.clearRect(0,0,180,180);
- let sx=180/MW,sy=180/MH;
- for(let y=0;y<MH;y++)for(let x=0;x<MW;x++)
-  if(maze[y][x]==="#"){
-   mctx.fillStyle="#444";
-   mctx.fillRect(x*sx,y*sy,sx,sy);
-  }
- mctx.fillStyle="lime";
- for(let y=0;y<MH;y++)for(let x=0;x<MW;x++)
-  if(maze[y][x]==="E")mctx.fillRect(x*sx,y*sy,sx,sy);
- mctx.fillStyle="cyan";
- mctx.fillRect(p.x*sx-3,p.y*sy-3,6,6);
- mctx.fillStyle="red";
- mctx.fillRect(cpu.x*sx-3,cpu.y*sy-3,6,6);
+/* PSEUDO-3D ENTITY */
+function drawEntity(ent,color){
+  const dx=ent.x-player.x;
+  const dy=ent.y-player.y;
+  const dist=Math.hypot(dx,dy);
+
+  const size=Math.max(20,1200/dist);
+  const sx=canvas.width/2+dx;
+  const sy=canvas.height/2+dy-size/2;
+
+  ctx.fillStyle=color;
+  ctx.beginPath();
+  ctx.roundRect(sx-size/2,sy,size,size*1.8,20);
+  ctx.fill();
+
+  // eyes (makes it creepy & 3D)
+  ctx.fillStyle="white";
+  ctx.beginPath();
+  ctx.arc(sx-size/6,sy+size/3, size/10,0,Math.PI*2);
+  ctx.arc(sx+size/6,sy+size/3, size/10,0,Math.PI*2);
+  ctx.fill();
 }
 
-/* ===== LOOP ===== */
+/* MINIMAP (FULL MAZE) */
+function drawMap(){
+  mctx.clearRect(0,0,map.width,map.height);
+  const scale=Math.min(
+    map.width/(MAZE[0].length*TILE),
+    map.height/(MAZE.length*TILE)
+  );
+
+  for(let y=0;y<MAZE.length;y++){
+    for(let x=0;x<MAZE[y].length;x++){
+      if(MAZE[y][x]==="#"){
+        mctx.fillStyle="#555";
+        mctx.fillRect(x*TILE*scale,y*TILE*scale,TILE*scale,TILE*scale);
+      }
+      if(MAZE[y][x]==="E"){
+        mctx.fillStyle="lime";
+        mctx.fillRect(x*TILE*scale,y*TILE*scale,TILE*scale,TILE*scale);
+      }
+    }
+  }
+
+  mctx.fillStyle="cyan";
+  mctx.fillRect(player.x*scale-4,player.y*scale-4,8,8);
+
+  mctx.fillStyle="red";
+  mctx.fillRect(tung.x*scale-4,tung.y*scale-4,8,8);
+}
+
+/* LOOP */
 function loop(){
- update();render3D();renderMap();
- requestAnimationFrame(loop);
-}
+  ctx.fillStyle="black";
+  ctx.fillRect(0,0,canvas.width,canvas.height);
 
-menu.querySelector("button").onclick=()=>{
- menu.style.display="none";
- c.requestPointerLock();
- loop();
-};
+  update();
+  drawMaze();
+  drawEntity(tung,"#8b4513"); // TUNG TUNG SAHUR
+  drawMap();
+
+  requestAnimationFrame(loop);
+}
+loop();
 </script>
 </body>
 </html>
