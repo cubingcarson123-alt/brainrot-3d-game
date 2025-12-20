@@ -2,93 +2,208 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>WASD MOVE / ARROWS LOOK</title>
+<title>Maze + Enemy + Jumpscare</title>
 <style>
 body{margin:0;overflow:hidden;background:#000}
+#barWrap{
+ position:fixed;top:10px;left:50%;transform:translateX(-50%);
+ width:320px;height:14px;border:2px solid #fff;background:#300
+}
+#bar{height:100%;width:0%;background:#f00}
+#map{
+ position:fixed;right:10px;top:10px;
+ width:200px;height:200px;border:2px solid #fff;background:#111
+}
+#jumpscare{
+ position:fixed;inset:0;background:#000;display:none;
+ align-items:center;justify-content:center;z-index:999
+}
+#jumpscare img{width:100%;height:100%;object-fit:cover}
 </style>
 </head>
 <body>
 
+<div id="barWrap"><div id="bar"></div></div>
+<canvas id="map" width="200" height="200"></canvas>
+<div id="jumpscare">
+ <img src="https://i.imgur.com/7kceK0n.png">
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/three@0.158/build/three.min.js"></script>
 <script>
 /* ===== SCENE ===== */
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x222);
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x1b1b1b);
 
-const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 1000);
-camera.position.set(0,1.6,5);
+const camera=new THREE.PerspectiveCamera(75,innerWidth/innerHeight,0.1,1000);
+camera.position.set(-40,1.6,-40);
 
-const renderer = new THREE.WebGLRenderer();
-renderer.setSize(innerWidth, innerHeight);
+const renderer=new THREE.WebGLRenderer();
+renderer.setSize(innerWidth,innerHeight);
 document.body.appendChild(renderer.domElement);
 
 /* ===== LIGHT ===== */
-scene.add(new THREE.AmbientLight(0xffffff, 1));
+scene.add(new THREE.AmbientLight(0xffffff,0.8));
 
 /* ===== FLOOR ===== */
-const floor = new THREE.Mesh(
-  new THREE.PlaneGeometry(100,100),
-  new THREE.MeshBasicMaterial({color:0x555})
+const floor=new THREE.Mesh(
+ new THREE.PlaneGeometry(200,200),
+ new THREE.MeshBasicMaterial({color:0x555})
 );
-floor.rotation.x = -Math.PI/2;
+floor.rotation.x=-Math.PI/2;
 scene.add(floor);
 
-/* ===== WALL ===== */
-const wall = new THREE.Mesh(
-  new THREE.BoxGeometry(10,2,1),
-  new THREE.MeshBasicMaterial({color:0x00f})
+/* ===== MAZE ===== */
+const walls=[];
+function wall(x,z,w,d){
+ const m=new THREE.Mesh(
+  new THREE.BoxGeometry(w,2,d),
+  new THREE.MeshBasicMaterial({color:0x4aa3ff})
+ );
+ m.position.set(x,1,z);
+ m.userData={w,d};
+ scene.add(m);walls.push(m);
+}
+
+/* outer */
+for(let i=-90;i<=90;i+=10){
+ wall(i,-90,10,2); wall(i,90,10,2);
+}
+for(let i=-80;i<=80;i+=20){
+ wall(-90,i,2,20); wall(90,i,2,20);
+}
+
+/* inner */
+wall(0,0,2,120);
+wall(-40,20,80,2);
+wall(40,-20,80,2);
+wall(-20,-40,2,80);
+wall(20,40,2,80);
+
+/* ===== EXIT ===== */
+const exit=new THREE.Mesh(
+ new THREE.BoxGeometry(5,5,5),
+ new THREE.MeshBasicMaterial({color:0x00ff00})
 );
-wall.position.set(0,1,0);
-scene.add(wall);
-
-/* ===== INPUT ===== */
-const keys = {};
-document.addEventListener("keydown", e => keys[e.key] = true);
-document.addEventListener("keyup", e => keys[e.key] = false);
-
-let yaw = 0;
-const lookSpeed = 0.04;
-const moveSpeed = 0.2;
+exit.position.set(80,2,80);
+scene.add(exit);
 
 /* ===== COLLISION ===== */
-function hit(pos){
-  return Math.abs(pos.z - wall.position.z) < 1 &&
-         Math.abs(pos.x - wall.position.x) < 5;
+function hit(pos,r=0.6){
+ for(const w of walls){
+  if(Math.abs(pos.x-w.position.x)<w.userData.w/2+r &&
+     Math.abs(pos.z-w.position.z)<w.userData.d/2+r) return true;
+ }
+ return false;
 }
+
+/* ===== INPUT ===== */
+const keys={};
+document.addEventListener("keydown",e=>keys[e.key.toLowerCase()]=true);
+document.addEventListener("keyup",e=>keys[e.key.toLowerCase()]=false);
+
+let yaw=0;
+
+/* ===== ENEMY FACE ===== */
+function faceTex(){
+ const c=document.createElement("canvas");
+ c.width=c.height=256;
+ const g=c.getContext("2d");
+ g.fillStyle="#f2c9a0";g.fillRect(0,0,256,256);
+ g.fillStyle="#000";
+ g.beginPath();g.arc(80,120,20,0,6.28);g.arc(176,120,20,0,6.28);g.fill();
+ g.fillRect(70,170,120,15);
+ g.font="bold 28px sans-serif";g.fillText("TUNG",70,40);
+ return new THREE.CanvasTexture(c);
+}
+
+const enemy=new THREE.Mesh(
+ new THREE.BoxGeometry(2,3,2),
+ [
+  new THREE.MeshBasicMaterial({map:faceTex()}),
+  new THREE.MeshBasicMaterial({color:0xff0000}),
+  new THREE.MeshBasicMaterial({color:0xff0000}),
+  new THREE.MeshBasicMaterial({color:0xff0000}),
+  new THREE.MeshBasicMaterial({color:0xff0000}),
+  new THREE.MeshBasicMaterial({color:0xff0000})
+ ]
+);
+enemy.position.set(60,1.5,60);
+scene.add(enemy);
+
+/* ===== MAP ===== */
+const map=document.getElementById("map");
+const ctx=map.getContext("2d");
 
 /* ===== LOOP ===== */
 function animate(){
-  requestAnimationFrame(animate);
+ requestAnimationFrame(animate);
 
-  /* LOOK WITH ARROWS */
-  if(keys.ArrowLeft)  yaw += lookSpeed;
-  if(keys.ArrowRight) yaw -= lookSpeed;
+ /* look */
+ if(keys.arrowleft) yaw+=0.04;
+ if(keys.arrowright) yaw-=0.04;
+ camera.rotation.y=yaw;
 
-  camera.rotation.y = yaw;
+ /* move */
+ let v=new THREE.Vector3();
+ if(keys.w) v.z-=1;
+ if(keys.s) v.z+=1;
+ if(keys.a) v.x-=1;
+ if(keys.d) v.x+=1;
 
-  /* MOVE WITH WASD */
-  let move = new THREE.Vector3();
-  if(keys.w) move.z -= 1;
-  if(keys.s) move.z += 1;
-  if(keys.a) move.x -= 1;
-  if(keys.d) move.x += 1;
+ if(v.length()){
+  v.normalize().applyAxisAngle(new THREE.Vector3(0,1,0),yaw);
+  const n=camera.position.clone().add(v.multiplyScalar(0.18));
+  if(!hit(n)) camera.position.copy(n);
+ }
 
-  if(move.length()){
-    move.normalize().applyAxisAngle(new THREE.Vector3(0,1,0), yaw);
-    const next = camera.position.clone().add(move.multiplyScalar(moveSpeed));
-    if(!hit(next)) camera.position.copy(next);
-  }
+ /* enemy chase */
+ const dir=camera.position.clone().sub(enemy.position);
+ const dist=dir.length();
+ dir.y=0;dir.normalize();
+ const en=enemy.position.clone().add(dir.multiplyScalar(0.05));
+ if(!hit(en)) enemy.position.copy(en);
 
-  renderer.render(scene, camera);
+ /* proximity bar */
+ const pct=Math.min(100,Math.max(0,100-(dist*1.2)));
+ document.getElementById("bar").style.width=pct+"%";
+
+ /* jumpscare */
+ if(dist<1.2){
+  document.getElementById("jumpscare").style.display="flex";
+  setTimeout(()=>location.reload(),1200);
+ }
+
+ /* win */
+ if(camera.position.distanceTo(exit.position)<4){
+  alert("YOU ESCAPED");
+  location.reload();
+ }
+
+ /* minimap */
+ ctx.clearRect(0,0,200,200);
+ ctx.fillStyle="#333";ctx.fillRect(0,0,200,200);
+ ctx.fillStyle="#555";
+ for(const w of walls){
+  ctx.fillRect(w.position.x/2+100,w.position.z/2+100,
+               w.userData.w/2,w.userData.d/2);
+ }
+ ctx.fillStyle="#0f0";
+ ctx.fillRect(camera.position.x/2+100,camera.position.z/2+100,4,4);
+ ctx.fillStyle="#f00";
+ ctx.fillRect(enemy.position.x/2+100,enemy.position.z/2+100,4,4);
+ ctx.fillStyle="#0f0";
+ ctx.fillRect(exit.position.x/2+100,exit.position.z/2+100,6,6);
+
+ renderer.render(scene,camera);
 }
 animate();
 
-onresize = () => {
-  camera.aspect = innerWidth / innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(innerWidth, innerHeight);
+onresize=()=>{
+ camera.aspect=innerWidth/innerHeight;
+ camera.updateProjectionMatrix();
+ renderer.setSize(innerWidth,innerHeight);
 };
 </script>
-
 </body>
 </html>
