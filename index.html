@@ -1,6 +1,18 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Maze Game</title>
+<style>
+  body { margin: 0; overflow: hidden; background: #111; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+
 <script src="https://cdn.jsdelivr.net/npm/three@0.158/build/three.min.js"></script>
 <script>
-/* ========= SCENE ========= */
+/* ===== SCENE ===== */
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x222222);
 
@@ -11,13 +23,13 @@ const renderer = new THREE.WebGLRenderer({antialias:true});
 renderer.setSize(innerWidth,innerHeight);
 document.body.appendChild(renderer.domElement);
 
-/* ========= LIGHT ========= */
+/* ===== LIGHT ===== */
 scene.add(new THREE.AmbientLight(0xffffff,0.6));
 const sun = new THREE.DirectionalLight(0xffffff,0.8);
 sun.position.set(5,10,5);
 scene.add(sun);
 
-/* ========= FLOOR ========= */
+/* ===== FLOOR ===== */
 const floor = new THREE.Mesh(
   new THREE.PlaneGeometry(100,100),
   new THREE.MeshStandardMaterial({color:0x666666})
@@ -25,15 +37,17 @@ const floor = new THREE.Mesh(
 floor.rotation.x = -Math.PI/2;
 scene.add(floor);
 
-/* ========= WALLS ========= */
+/* ===== WALLS ===== */
 const walls = [];
 const wallMat = new THREE.MeshStandardMaterial({color:0x7faaff});
 
 function addWall(x,z,w,d){
-  const geo = new THREE.BoxGeometry(w,2,d);
-  const wall = new THREE.Mesh(geo, wallMat);
+  const wall = new THREE.Mesh(
+    new THREE.BoxGeometry(w,2,d),
+    wallMat
+  );
   wall.position.set(x,1,z);
-  wall.userData.size = { w, d };
+  wall.userData = { w, d };
   scene.add(wall);
   walls.push(wall);
 }
@@ -46,22 +60,18 @@ addWall(0,0,12,1);
 addWall(-4,2,1,6);
 addWall(4,-2,1,6);
 
-/* ========= COLLISION ========= */
+/* ===== COLLISION ===== */
 function hitsWall(pos, radius=0.5){
   for(const w of walls){
-    const halfW = w.userData.size.w / 2;
-    const halfD = w.userData.size.d / 2;
     if(
-      Math.abs(pos.x - w.position.x) < halfW + radius &&
-      Math.abs(pos.z - w.position.z) < halfD + radius
-    ){
-      return true;
-    }
+      Math.abs(pos.x - w.position.x) < w.userData.w/2 + radius &&
+      Math.abs(pos.z - w.position.z) < w.userData.d/2 + radius
+    ) return true;
   }
   return false;
 }
 
-/* ========= CPU ========= */
+/* ===== CPU ===== */
 const cpu = new THREE.Mesh(
   new THREE.BoxGeometry(1,2.5,1),
   new THREE.MeshStandardMaterial({color:0xff3333})
@@ -69,15 +79,15 @@ const cpu = new THREE.Mesh(
 cpu.position.set(6,1.25,0);
 scene.add(cpu);
 
-let cpuDir = new THREE.Vector3(1,0,0).normalize();
+let cpuDir = new THREE.Vector3(1,0,0);
 
-/* ========= CONTROLS ========= */
+/* ===== CONTROLS ===== */
 let yaw = 0;
 let moving = false;
 
 document.body.onclick = ()=>document.body.requestPointerLock();
 
-document.addEventListener("mousemove", e=>{
+document.addEventListener("mousemove",e=>{
   if(document.pointerLockElement){
     yaw -= e.movementX * 0.002;
   }
@@ -90,7 +100,7 @@ document.addEventListener("keyup",e=>{
   if(e.key==="w") moving=false;
 });
 
-/* ========= LOOP ========= */
+/* ===== LOOP ===== */
 function animate(){
   requestAnimationFrame(animate);
 
@@ -98,21 +108,15 @@ function animate(){
 
   if(moving){
     const dir = new THREE.Vector3(
-      -Math.sin(yaw),
-      0,
-      -Math.cos(yaw)
+      -Math.sin(yaw),0,-Math.cos(yaw)
     );
     const next = camera.position.clone().add(dir.multiplyScalar(0.08));
     if(!hitsWall(next)) camera.position.copy(next);
   }
 
-  // CPU movement
   const cpuNext = cpu.position.clone().add(cpuDir.clone().multiplyScalar(0.04));
-  if(hitsWall(cpuNext,0.6)){
-    cpuDir.negate();
-  } else {
-    cpu.position.copy(cpuNext);
-  }
+  if(hitsWall(cpuNext,0.6)) cpuDir.negate();
+  else cpu.position.copy(cpuNext);
 
   renderer.render(scene,camera);
 }
@@ -124,3 +128,6 @@ onresize=()=>{
   renderer.setSize(innerWidth,innerHeight);
 };
 </script>
+
+</body>
+</html>
