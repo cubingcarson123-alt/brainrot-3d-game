@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>FIXED BAR + REAL MAP</title>
+<style>
+body{margin:0;overflow:hidden;background:#000}
+#ui{position:fixed;top:10px;left:50%;transform:translateX(-50%);
+width:300px;height:14px;border:2px solid #fff}
+#bar{height:100%;width:100%;background:#0f0}
+#map{position:fixed;right:10px;top:10px;width:200px;height:200px;
+background:#111;border:2px solid #fff}
+</style>
+</head>
+<body>
+<div id="ui"><div id="bar"></div></div>
+<canvas id="map" width="200" height="200"></canvas>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.158/build/three.min.js"></script>
+<script>
+/* ===== SCENE ===== */
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x202020);
+
+const camera=new THREE.PerspectiveCamera(75,innerWidth/innerHeight,0.1,1000);
+camera.position.set(0,1.6,0);
+
+const renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(innerWidth,innerHeight);
+document.body.appendChild(renderer.domElement);
+
+/* ===== LIGHT ===== */
+scene.add(new THREE.AmbientLight(0xffffff,0.7));
+
+/* ===== FLOOR ===== */
+const floor=new THREE.Mesh(
+ new THREE.PlaneGeometry(200,200),
+ new THREE.MeshStandardMaterial({color:0x555555})
+);
+floor.rotation.x=-Math.PI/2;
+scene.add(floor);
+
+/* ===== MAZE ===== */
+const walls=[];
+function addWall(x,z,w,d){
+ const m=new THREE.Mesh(
+  new THREE.BoxGeometry(w,2,d),
+  new THREE.MeshStandardMaterial({color:0x4aa3ff})
+ );
+ m.position.set(x,1,z);
+ m.userData={w,d};
+ scene.add(m); walls.push(m);
+}
+
+/* maze layout */
+for(let i=-90;i<=90;i+=10){ addWall(i,-90,10,2); addWall(i,90,10,2); }
+for(let i=-80;i<=80;i+=20){
+ addWall(-90,i,2,20); addWall(90,i,2,20);
+ addWall(i,0,2,40);
+}
+addWall(30,30,40,2);
+addWall(-30,-30,40,2);
+
+/* ===== EXIT ===== */
+const exit=new THREE.Mesh(
+ new THREE.BoxGeometry(4,4,4),
+ new THREE.MeshStandardMaterial({color:0x00ff00,emissive:0x009900})
+);
+exit.position.set(80,2,80);
+scene.add(exit);
+
+/* ===== COLLISION ===== */
+function hit(pos,r=0.6){
+ for(const w of walls){
+  if(Math.abs(pos.x-w.position.x)<w.userData.w/2+r &&
+     Math.abs(pos.z-w.position.z)<w.userData.d/2+r) return true;
+ }
+ return false;
+}
+
+/* ===== PLAYER ===== */
+let yaw=0, health=100;
+const keys={};
+
+document.body.onclick=()=>document.body.requestPointerLock();
+document.addEventListener("mousemove",e=>{
+ if(document.pointerLockElement) yaw-=e.movementX*0.002;
+});
+document.addEventListener("keydown",e=>keys[e.key.toLowerCase()]=true);
+document.addEventListener("keyup",e=>keys[e.key.toLowerCase()]=false);
+
+/* ===== ENEMY ===== */
+const enemy=new THREE.Mesh(
+ new THREE.BoxGeometry(2,3,2),
+ new THREE.MeshStandardMaterial({color:0xff3333})
+);
+enemy.position.set(-80,1.5,-80);
+scene.add(enemy);
+
+/* ===== LINE OF SIGHT CHECK ===== */
+const raycaster=new THREE.Raycaster();
+function canSeePlayer(){
+ const dir=camera.position.clone().sub(enemy.position).normalize();
+ raycaster.set(enemy.position,dir);
+ const hits=raycaster.intersectObjects(walls);
+ if(hits.length===0) return true;
+ return hits[0].distance > enemy.position.distanceTo(camera.position);
+}
+
+/* ===== MAP ===== */
+const map=document.getElementById("map");
+const ctx=map.getContext("2d");
+
+/* ===== LOOP ===== */
+function animate(){
+ requestAnimationFrame(animate);
+ camera.rotation.y=yaw;
+
+ /* movement */
+ let move=new THREE.Vector3();
+ if(keys.w) move.z-=1;
+ if(keys.s) move.z+=1;
+ if(keys.a) move.x-=1;
+ if(keys.d) move.x+=1;
+
+ if(move.length()){
+  move.normalize().applyAxisAngle(new THREE.Vector3(0,1,0),yaw);
+  const next=camera.position.clone().add(move.multiplyScalar(0.15));
+  if(!hit(next)) camera.position.copy(next);
+ }
+
+ /* enemy chase */
+ const v=camera.position.clone().sub(enemy.position);
+ v.y=0; v.normalize();
+ const en=enemy.position.clone().add(v.multiplyScalar(0.06));
+ if(!hit(en)) enemy.position.copy(en);
+
+ /* damage ONLY if close + visible */
+ if(enemy.position.distanceTo(camera.position)<2 && canSeePlayer()){
+  health=Math.max(0,health-0.4);
+  document.getElementById("bar").style.width=health+"%";
+ }
+
+ /* minimap draw */
+ ctx.clearRect(0,0,200,200);
+ ctx.fillStyle="#222"; ctx.fillRect(0,0,200,200);
+
+ ctx.fillStyle="#555";
+ for(const w of walls){
+  ctx.fillRect(w.position.x/2+100,w.position.z/2+100,
+               w.userData.w/2,w.userData.d/2);
+ }
+
+ ctx.fillStyle="#0f0";
+ ctx.fillRect(camera.position.x/2+100,camera.position.z/2+100,4,4);
+
+ ctx.fillStyle="#f00";
+ ctx.fillRect(enemy.position.x/2+100,enemy.position.z/2+100,4,4);
+
+ ctx.fillStyle="#0f0";
+ ctx.fillRect(exit.position.x/2+100,exit.position.z/2+100,6,6);
+
+ renderer.render(scene,camera);
+}
+animate();
+
+onresize=()=>{
+ camera.aspect=innerWidth/innerHeight;
+ camera.updateProjectionMatrix();
+ renderer.setSize(innerWidth,innerHeight);
+};
+</script>
+</body>
+</html>
