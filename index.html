@@ -2,14 +2,10 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Tung Tung Maze</title>
+<title>Tung Tung Sahur</title>
 <style>
 body { margin:0; overflow:hidden; background:black }
-#map {
-  position:fixed; top:10px; right:10px;
-  width:160px; height:160px;
-  background:#111; border:2px solid white;
-}
+
 #bar {
   position:fixed; bottom:20px; left:50%;
   transform:translateX(-50%);
@@ -17,21 +13,52 @@ body { margin:0; overflow:hidden; background:black }
   border:2px solid white; background:#333;
 }
 #barInner { height:100%; width:0%; background:red; }
+
+#map {
+  position:fixed; top:10px; right:10px;
+  width:160px; height:160px;
+  background:#111; border:2px solid white;
+}
+
 #jumpscare {
   position:fixed; inset:0;
   background:black; display:none;
   align-items:center; justify-content:center;
   z-index:10;
 }
-.eye {
-  width:200px; height:200px;
-  background:white; border-radius:50%;
+
+#face {
+  width:400px; height:600px;
+  background:#d2b48c;
+  border-radius:40px;
   position:relative;
+  animation:slam 0.4s infinite alternate;
+}
+
+.eye {
+  width:80px; height:80px;
+  background:white; border-radius:50%;
+  position:absolute; top:120px;
 }
 .eye::after {
   content:""; position:absolute;
-  inset:70px; background:black;
+  inset:25px; background:black;
   border-radius:50%;
+}
+#eyeL { left:80px }
+#eyeR { right:80px }
+
+#smile {
+  position:absolute;
+  width:200px; height:30px;
+  background:black;
+  bottom:160px; left:100px;
+  border-radius:0 0 50px 50px;
+}
+
+@keyframes slam {
+  from { transform:scale(1) }
+  to { transform:scale(1.15) }
 }
 </style>
 </head>
@@ -39,7 +66,14 @@ body { margin:0; overflow:hidden; background:black }
 
 <div id="bar"><div id="barInner"></div></div>
 <canvas id="map"></canvas>
-<div id="jumpscare"><div class="eye"></div></div>
+
+<div id="jumpscare">
+  <div id="face">
+    <div class="eye" id="eyeL"></div>
+    <div class="eye" id="eyeR"></div>
+    <div id="smile"></div>
+  </div>
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/three@0.158/build/three.min.js"></script>
 <script>
@@ -99,21 +133,22 @@ maze.forEach((row,z)=>{
   });
 });
 
-/* ---------- EXIT ---------- */
+/* ---------- EXIT (CLEAR) ---------- */
 const exit=new THREE.Mesh(
-  new THREE.BoxGeometry(2,2,2),
-  new THREE.MeshStandardMaterial({color:0x00ff00})
+  new THREE.BoxGeometry(3,4,1),
+  new THREE.MeshStandardMaterial({color:0x00ff00, emissive:0x00ff00})
 );
 exit.position.copy(exitPos);
+exit.position.y=2;
 scene.add(exit);
 
 /* ---------- COLLISION ---------- */
 const R=0.7;
 function blocked(p){
-  return walls.some(w=>{
-    return Math.abs(p.x-w.position.x)<CELL/2+R &&
-           Math.abs(p.z-w.position.z)<CELL/2+R;
-  });
+  return walls.some(w =>
+    Math.abs(p.x-w.position.x)<CELL/2+R &&
+    Math.abs(p.z-w.position.z)<CELL/2+R
+  );
 }
 
 /* ---------- CONTROLS ---------- */
@@ -122,44 +157,42 @@ const keys={};
 addEventListener("keydown",e=>keys[e.key.toLowerCase()]=true);
 addEventListener("keyup",e=>keys[e.key.toLowerCase()]=false);
 
-/* ---------- ENEMY (TAN BLOCK) ---------- */
+/* ---------- ENEMY (TUNG TUNG SHAPE) ---------- */
 const enemy=new THREE.Group();
 
-// body
+// tall body
 const body=new THREE.Mesh(
-  new THREE.BoxGeometry(1.6,2,1.2),
+  new THREE.BoxGeometry(1.5,3,1.2),
   new THREE.MeshStandardMaterial({color:0xd2b48c})
 );
-body.position.y=1.2;
+body.position.y=1.8;
 enemy.add(body);
 
 // legs
 for(let i=-0.4;i<=0.4;i+=0.8){
   const leg=new THREE.Mesh(
-    new THREE.BoxGeometry(0.3,1,0.3),
+    new THREE.BoxGeometry(0.3,1.2,0.3),
     new THREE.MeshStandardMaterial({color:0xd2b48c})
   );
-  leg.position.set(i,0.5,0);
+  leg.position.set(i,0.6,0);
   enemy.add(leg);
 }
 
-// eyes
+// face
 const eyeMat=new THREE.MeshBasicMaterial({color:0x000000});
-const e1=new THREE.Mesh(new THREE.BoxGeometry(0.2,0.2,0.01),eyeMat);
+const e1=new THREE.Mesh(new THREE.SphereGeometry(0.15),eyeMat);
 const e2=e1.clone();
-e1.position.set(-0.3,1.4,0.61);
-e2.position.set(0.3,1.4,0.61);
+e1.position.set(-0.3,2.4,0.61);
+e2.position.set(0.3,2.4,0.61);
 enemy.add(e1,e2);
 
-// smile
 const smile=new THREE.Mesh(
-  new THREE.BoxGeometry(0.6,0.1,0.01),eyeMat
+  new THREE.BoxGeometry(0.7,0.15,0.01),eyeMat
 );
-smile.position.set(0,1.1,0.61);
+smile.position.set(0,2.1,0.61);
 enemy.add(smile);
 
-// SAFE SPAWN
-enemy.position.set(5*CELL,0,7*CELL);
+enemy.position.set(6*CELL,0,7*CELL);
 scene.add(enemy);
 
 /* ---------- MAP ---------- */
@@ -203,19 +236,18 @@ function animate(){
 
   const dist=camera.position.distanceTo(enemy.position);
   const dir=camera.position.clone().sub(enemy.position).normalize();
-  const enext=enemy.position.clone().add(dir.multiplyScalar(0.05));
+  const enext=enemy.position.clone().add(dir.multiplyScalar(0.06));
   if(!blocked(enext)) enemy.position.copy(enext);
 
   document.getElementById("barInner").style.width=Math.max(0,100-dist*7)+"%";
 
-  if(dist<1.3){
+  if(dist<1.4){
     document.getElementById("jumpscare").style.display="flex";
     setTimeout(()=>location.reload(),900);
   }
 
   if(camera.position.distanceTo(exit.position)<1.5){
-    alert("YOU ESCAPED");
-    location.reload();
+    document.body.innerHTML="<h1 style='color:white;text-align:center;margin-top:40vh'>YOU ESCAPED 🎉</h1>";
   }
 
   drawMap();
