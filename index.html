@@ -1,24 +1,11 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8" />
-<title>Maze Game – CPU Collision Fixed</title>
-<style>
-  body { margin: 0; overflow: hidden; background: #111; }
-  canvas { display: block; }
-</style>
-</head>
-<body>
-
 <script src="https://cdn.jsdelivr.net/npm/three@0.158/build/three.min.js"></script>
-
 <script>
 /* ========= SCENE ========= */
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x222222);
 
 const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 1000);
-camera.position.set(2,1.6,2);
+camera.position.set(0,1.6,8);
 
 const renderer = new THREE.WebGLRenderer({antialias:true});
 renderer.setSize(innerWidth,innerHeight);
@@ -43,11 +30,10 @@ const walls = [];
 const wallMat = new THREE.MeshStandardMaterial({color:0x7faaff});
 
 function addWall(x,z,w,d){
-  const wall = new THREE.Mesh(
-    new THREE.BoxGeometry(w,2,d),
-    wallMat
-  );
+  const geo = new THREE.BoxGeometry(w,2,d);
+  const wall = new THREE.Mesh(geo, wallMat);
   wall.position.set(x,1,z);
+  wall.userData.size = { w, d };
   scene.add(wall);
   walls.push(wall);
 }
@@ -61,12 +47,16 @@ addWall(-4,2,1,6);
 addWall(4,-2,1,6);
 
 /* ========= COLLISION ========= */
-function hitsWall(pos, radius=0.6){
+function hitsWall(pos, radius=0.5){
   for(const w of walls){
+    const halfW = w.userData.size.w / 2;
+    const halfD = w.userData.size.d / 2;
     if(
-      Math.abs(pos.x - w.position.x) < (radius + w.scale.x) &&
-      Math.abs(pos.z - w.position.z) < (radius + w.scale.z)
-    ) return true;
+      Math.abs(pos.x - w.position.x) < halfW + radius &&
+      Math.abs(pos.z - w.position.z) < halfD + radius
+    ){
+      return true;
+    }
   }
   return false;
 }
@@ -87,7 +77,7 @@ let moving = false;
 
 document.body.onclick = ()=>document.body.requestPointerLock();
 
-document.addEventListener("mousemove",e=>{
+document.addEventListener("mousemove", e=>{
   if(document.pointerLockElement){
     yaw -= e.movementX * 0.002;
   }
@@ -104,19 +94,22 @@ document.addEventListener("keyup",e=>{
 function animate(){
   requestAnimationFrame(animate);
 
-  camera.rotation.set(0,yaw,0);
+  camera.rotation.y = yaw;
 
   if(moving){
-    const dir = new THREE.Vector3(Math.sin(yaw),0,Math.cos(yaw));
+    const dir = new THREE.Vector3(
+      -Math.sin(yaw),
+      0,
+      -Math.cos(yaw)
+    );
     const next = camera.position.clone().add(dir.multiplyScalar(0.08));
     if(!hitsWall(next)) camera.position.copy(next);
   }
 
-  // CPU movement with collision
+  // CPU movement
   const cpuNext = cpu.position.clone().add(cpuDir.clone().multiplyScalar(0.04));
-  if(hitsWall(cpuNext)){
-    cpuDir.x = -cpuDir.x;
-    cpuDir.z = -cpuDir.z;
+  if(hitsWall(cpuNext,0.6)){
+    cpuDir.negate();
   } else {
     cpu.position.copy(cpuNext);
   }
@@ -126,10 +119,8 @@ function animate(){
 animate();
 
 onresize=()=>{
-  camera.aspect=innerWidth/innerHeight;
+  camera.aspect = innerWidth/innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth,innerHeight);
 };
 </script>
-</body>
-</html>
