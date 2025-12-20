@@ -2,85 +2,87 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>BIG MAZE FINAL</title>
+<title>TUNG FINAL FIX</title>
 <style>
 body{margin:0;overflow:hidden;background:#000}
-#ui{
+#barWrap{
  position:fixed;bottom:20px;left:50%;
  transform:translateX(-50%);
- width:300px;height:20px;
- border:2px solid #fff
+ width:320px;height:18px;border:2px solid #fff
 }
-#bar{
- height:100%;width:0%;
- background:lime;
- transition:width 0.1s, background 0.2s;
-}
+#bar{height:100%;width:0%;background:lime}
 #map{
  position:fixed;top:10px;right:10px;
- width:220px;height:220px;
- border:2px solid #fff;background:#111
+ width:220px;height:220px;border:2px solid #fff;background:#111
+}
+#flash{
+ position:fixed;inset:0;
+ background:white;display:none;z-index:10
 }
 </style>
 </head>
 <body>
 
-<div id="ui"><div id="bar"></div></div>
+<div id="barWrap"><div id="bar"></div></div>
 <canvas id="map" width="220" height="220"></canvas>
+<div id="flash"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/three@0.158/build/three.min.js"></script>
 <script>
-/* ===== SCENE ===== */
+/* ================= SCENE ================= */
 const scene=new THREE.Scene();
 scene.background=new THREE.Color(0x111);
 
-const camera=new THREE.PerspectiveCamera(75,innerWidth/innerHeight,0.1,2000);
-camera.position.set(0,1.6,200);
+const camera=new THREE.PerspectiveCamera(75,innerWidth/innerHeight,0.1,3000);
+camera.position.set(0,1.6,0); // SAFE SPAWN
 
 const renderer=new THREE.WebGLRenderer({antialias:true});
 renderer.setSize(innerWidth,innerHeight);
 document.body.appendChild(renderer.domElement);
 
-/* ===== LIGHT ===== */
 scene.add(new THREE.AmbientLight(0xffffff,1));
 
-/* ===== FLOOR ===== */
+/* ================= FLOOR ================= */
 const floor=new THREE.Mesh(
- new THREE.PlaneGeometry(800,800),
+ new THREE.PlaneGeometry(1200,1200),
  new THREE.MeshBasicMaterial({color:0x222})
 );
 floor.rotation.x=-Math.PI/2;
 scene.add(floor);
 
-/* ===== MAZE ===== */
+/* ================= MAZE ================= */
 const walls=[];
 function wall(x,z,w,d){
  const m=new THREE.Mesh(
-  new THREE.BoxGeometry(w,5,d),
+  new THREE.BoxGeometry(w,6,d),
   new THREE.MeshBasicMaterial({color:0x4aa3ff})
  );
- m.position.set(x,2.5,z);
+ m.position.set(x,3,z);
  m.userData={w,d};
  scene.add(m); walls.push(m);
 }
 
-/* outer */
-for(let i=-380;i<=380;i+=40){
- wall(i,-380,40,4); wall(i,380,40,4);
+/* SAFE SPAWN ROOM (NO WALLS HERE) */
+const SAFE=60;
+
+/* OUTER WALLS */
+for(let i=-520;i<=520;i+=40){
+ wall(i,-520,40,4); wall(i,520,40,4);
 }
-for(let i=-340;i<=340;i+=80){
- wall(-380,i,4,80); wall(380,i,4,80);
+for(let i=-480;i<=480;i+=80){
+ wall(-520,i,4,80); wall(520,i,4,80);
 }
 
-/* inner grid */
-for(let i=-300;i<=300;i+=120){
- wall(i,0,4,600);
- wall(0,i,600,4);
- wall(i,200,200,4);
- wall(200,i,4,200);
+/* INNER MAZE (AVOIDS SAFE ZONE) */
+for(let i=-440;i<=440;i+=120){
+ if(Math.abs(i)<SAFE) continue;
+ wall(i,0,4,800);
+ wall(0,i,800,4);
+ wall(i,240,240,4);
+ wall(240,i,4,240);
 }
 
-/* ===== COLLISION ===== */
+/* ================= COLLISION ================= */
 function hit(p,r=0.7){
  for(const w of walls){
   if(Math.abs(p.x-w.position.x)<w.userData.w/2+r &&
@@ -89,16 +91,17 @@ function hit(p,r=0.7){
  return false;
 }
 
-/* ===== INPUT ===== */
+/* ================= INPUT ================= */
 const keys={};
 addEventListener("keydown",e=>keys[e.key.toLowerCase()]=true);
 addEventListener("keyup",e=>keys[e.key.toLowerCase()]=false);
-let yaw=0,vy=0,onGround=true;
 
-/* ===== ENEMY ===== */
+let yaw=0,vy=0,onGround=true,unstuckFrames=5;
+
+/* ================= ENEMY ================= */
 const enemy=new THREE.Group();
 
-/* body */
+/* BODY */
 const body=new THREE.Mesh(
  new THREE.BoxGeometry(3,4,2),
  new THREE.MeshBasicMaterial({color:0xffffff})
@@ -106,44 +109,59 @@ const body=new THREE.Mesh(
 body.position.y=4;
 enemy.add(body);
 
-/* face */
-function face(){
- const c=document.createElement("canvas");
- c.width=c.height=128;
- const g=c.getContext("2d");
- g.fillStyle="#fff"; g.fillRect(0,0,128,128);
- g.fillStyle="#000";
- g.beginPath(); g.arc(40,50,8,0,6.28); g.arc(88,50,8,0,6.28); g.fill();
- g.beginPath(); g.arc(64,78,22,0,Math.PI); g.stroke();
- return new THREE.CanvasTexture(c);
+/* EYES */
+function eye(){
+ return new THREE.Mesh(
+  new THREE.SphereGeometry(0.35,16,16),
+  new THREE.MeshBasicMaterial({color:0x000000})
+ );
 }
-const faceMesh=new THREE.Mesh(
- new THREE.PlaneGeometry(2.8,3),
- new THREE.MeshBasicMaterial({map:face(),transparent:true})
-);
-faceMesh.position.z=1.01;
-faceMesh.position.y=4;
-enemy.add(faceMesh);
+const eyeL=eye(), eyeR=eye();
+eyeL.position.set(-0.6,4.6,1.1);
+eyeR.position.set(0.6,4.6,1.1);
+enemy.add(eyeL,eyeR);
 
-/* legs */
-const legMat=new THREE.MeshBasicMaterial({color:0xaaaaaa});
+/* LEGS */
+const legMat=new THREE.MeshBasicMaterial({color:0xaaa});
 const leg1=new THREE.Mesh(new THREE.BoxGeometry(0.8,2,0.8),legMat);
 const leg2=leg1.clone();
 leg1.position.set(-0.8,1,0);
 leg2.position.set(0.8,1,0);
 enemy.add(leg1,leg2);
 
-enemy.position.set(300,0,300);
+enemy.position.set(400,0,400);
 scene.add(enemy);
 
 let roamDir=new THREE.Vector3(1,0,0);
 
-/* ===== UI ===== */
+/* ================= UI ================= */
 const bar=document.getElementById("bar");
 const map=document.getElementById("map").getContext("2d");
-const SCALE=0.25;
+const flash=document.getElementById("flash");
+const SCALE=0.18;
 
-/* ===== LOOP ===== */
+/* ================= JUMPSCARE ================= */
+let scared=false;
+function jumpscare(){
+ scared=true;
+ flash.style.display="block";
+
+ const vL=new THREE.Vector3(), vR=new THREE.Vector3();
+ vL.subVectors(camera.position,eyeL.getWorldPosition(new THREE.Vector3())).normalize();
+ vR.subVectors(camera.position,eyeR.getWorldPosition(new THREE.Vector3())).normalize();
+
+ let t=0;
+ const scareLoop=()=>{
+  t+=0.08;
+  eyeL.position.add(vL.multiplyScalar(1.5));
+  eyeR.position.add(vR.multiplyScalar(1.5));
+  if(t<2) requestAnimationFrame(scareLoop);
+  else location.reload();
+ };
+ scareLoop();
+}
+
+/* ================= LOOP ================= */
 function animate(){
  requestAnimationFrame(animate);
 
@@ -161,13 +179,16 @@ function animate(){
 
  if(v.length()){
   v.normalize().applyAxisAngle(new THREE.Vector3(0,1,0),yaw);
-  const n=camera.position.clone().add(v.multiplyScalar(0.35));
-  if(!hit(n)) camera.position.copy(n);
+  const n=camera.position.clone().add(v.multiplyScalar(0.4));
+  if(unstuckFrames>0 || !hit(n)){
+   camera.position.copy(n);
+   unstuckFrames--;
+  }
  }
 
  /* JUMP */
- if(keys[" "]&&onGround){vy=0.28;onGround=false;}
- vy-=0.018;
+ if(keys[" "]&&onGround){vy=0.3;onGround=false;}
+ vy-=0.02;
  camera.position.y+=vy;
  if(camera.position.y<=1.6){
   camera.position.y=1.6;vy=0;onGround=true;
@@ -176,23 +197,24 @@ function animate(){
  /* ENEMY AI */
  const toP=camera.position.clone().sub(enemy.position);
  const dist=toP.length();
- let move=dist<120?toP:roamDir;
+ let move=dist<140?toP:roamDir;
  move.y=0; move.normalize();
 
- const en=enemy.position.clone().add(move.multiplyScalar(dist<120?0.22:0.08));
+ const en=enemy.position.clone().add(move.multiplyScalar(dist<140?0.25:0.1));
  if(hit(en)){
   roamDir.applyAxisAngle(new THREE.Vector3(0,1,0),Math.PI/2);
  }else enemy.position.copy(en);
 
  enemy.lookAt(camera.position);
- faceMesh.lookAt(camera.position);
+
+ if(dist<6 && !scared) jumpscare();
 
  /* PROXIMITY BAR */
- let pct=Math.max(0,1-dist/150);
+ let pct=Math.max(0,1-dist/200);
  bar.style.width=(pct*100)+"%";
  bar.style.background=pct>0.7?"red":pct>0.4?"orange":"lime";
 
- /* MAP */
+ /* MAP (TRUE SCALE) */
  map.clearRect(0,0,220,220);
  map.fillStyle="#222"; map.fillRect(0,0,220,220);
  map.fillStyle="#555";
